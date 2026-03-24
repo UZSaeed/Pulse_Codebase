@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-navy-900: #0A1929;
+  --color-navy-800: #0C1E36;
+  --color-navy-700: #0f2d4b;
+  --color-neon-blue: #00D8E8;
+  --color-neon-blue-hover: #00C4D4;
+  --color-neon-blue-glow: rgba(0, 216, 232, 0.3);
+  
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-orbitron: var(--font-orbitron), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  @apply bg-navy-900 text-slate-100;
+}
+
+@utility neon-text {
+  text-shadow: 0 0 10px var(--color-neon-blue-glow);
+  color: var(--color-neon-blue);
+}
+
+@utility neon-border {
+  box-shadow: 0 0 10px var(--color-neon-blue-glow);
+  border-color: var(--color-neon-blue);
+}
+
+@utility neon-shadow {
+  box-shadow: 0 0 15px var(--color-neon-blue-glow), inset 0 0 8px var(--color-neon-blue-glow);
+}
+
+@utility neon-glow {
+  filter: drop-shadow(0 0 8px var(--color-neon-blue-glow));
+}
