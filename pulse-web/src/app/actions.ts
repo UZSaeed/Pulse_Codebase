@@ -57,5 +57,5 @@ export async function getUserPreferences() {
     include: { preferences: true },
   });
 
-  return dbUser?.preferences || null;
+  return (dbUser as any)?.preferences || null;
 }

@@ -14,6 +14,17 @@ export interface SubjectProfile {
   elo: number;
   xp: number;
   rank: TieredRankInfo;
+  topics: Record<string, { elo: number; xp: number }>;
+}
+
+export interface UserPreferences {
+  testDate: string | null;
+  rampUpPercentage: number;
+  grindPercentage: number;
+  lastStretchPercentage: number;
+  rampUpQuestionsPerDay: number;
+  grindQuestionsPerDay: number;
+  lastStretchQuestionsPerDay: number;
 }
 
 export interface UserProfile {
@@ -26,6 +37,8 @@ export interface UserProfile {
   dailyStreak: number;
   lastPracticeDate: string | null; // ISO date string
   xpMultiplier: number;
+  plannerTasks: import('./planner').PlannerTask[];
+  preferences: UserPreferences;
 }
 
 export interface SessionResultInput {
@@ -67,22 +80,37 @@ export function checkLevelUp(oldXp: number, newXp: number): boolean {
   return getLevel(newXp) > getLevel(oldXp);
 }
 
+import { generateWeeklyPlan } from './planner';
+
 // ─── Profile Factory ─────────────────────────────────────────────
 
 /** Create a fresh default profile */
 export function createDefaultProfile(id: string = 'local', name: string = 'Uzair'): UserProfile {
   const subjects = {} as Record<McatSubject, SubjectProfile>;
   for (const s of MCAT_SUBJECTS) {
+    const defaultTopics: Record<string, { elo: number; xp: number }> = {};
+    const MCAT_CHAPTERS = require('./chapters').MCAT_CHAPTERS;
+    if (MCAT_CHAPTERS[s]) {
+      for (const chapter of MCAT_CHAPTERS[s]) {
+        for (const topic of chapter.topics) {
+          defaultTopics[topic] = { elo: DEFAULT_ELO, xp: 0 };
+        }
+      }
+    }
+
     subjects[s] = {
       subject: s,
       elo: DEFAULT_ELO,
       xp: 0,
       rank: getTieredRank(DEFAULT_ELO),
+      topics: defaultTopics,
     };
   }
 
   const overallElo = DEFAULT_ELO;
-  return {
+  
+  // Create a template profile without tasks first
+  const baseProfile: UserProfile = {
     id,
     name,
     subjects,
@@ -92,7 +120,23 @@ export function createDefaultProfile(id: string = 'local', name: string = 'Uzair
     dailyStreak: 0,
     lastPracticeDate: null,
     xpMultiplier: 1.0,
+    plannerTasks: [],
+    preferences: {
+      testDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(), // roughly 3 months out
+      rampUpPercentage: 30,
+      grindPercentage: 50,
+      lastStretchPercentage: 20,
+      rampUpQuestionsPerDay: 30,
+      grindQuestionsPerDay: 60,
+      lastStretchQuestionsPerDay: 90,
+    }
   };
+  
+  // Generate the initial weekly plan from today
+  const todayStr = new Date().toISOString().split('T')[0];
+  baseProfile.plannerTasks = generateWeeklyPlan(baseProfile, todayStr);
+  
+  return baseProfile;
 }
 
 // ─── Session Processing ──────────────────────────────────────────
@@ -141,7 +185,7 @@ export function processSessionResults(
   for (const result of results) {
     const subjectProfile = newProfile.subjects[result.subject];
     
-    // Calculate ELO change
+    // Calculate ELO change for Subject
     const eloResult = calculateElo(
       subjectProfile.elo,
       result.questionDifficulty,
@@ -152,11 +196,23 @@ export function processSessionResults(
     subjectProfile.elo = eloResult.newUserElo;
     subjectProfile.rank = eloResult.tieredRank;
 
-    // Track per-topic changes
+    // Calculate ELO change for Subtopic
+    if (!subjectProfile.topics[result.topic]) {
+      subjectProfile.topics[result.topic] = { elo: subjectProfile.elo, xp: 0 }; // fallback
+    }
+    const topicEloResult = calculateElo(
+      subjectProfile.topics[result.topic].elo,
+      result.questionDifficulty,
+      result.isCorrect,
+      totalAnsweredInSubject // mock K factor
+    );
+    subjectProfile.topics[result.topic].elo = topicEloResult.newUserElo;
+
+    // Track per-topic changes for UI
     if (!eloChanges[result.topic]) {
       eloChanges[result.topic] = { topic: result.topic, subject: result.subject, eloDelta: 0 };
     }
-    eloChanges[result.topic].eloDelta += eloResult.eloChange;
+    eloChanges[result.topic].eloDelta += topicEloResult.eloChange;
     totalEloDelta += eloResult.eloChange;
 
     // Award XP

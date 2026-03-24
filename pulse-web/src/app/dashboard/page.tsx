@@ -37,13 +37,8 @@ export default function Home() {
         <header className="flex justify-between items-center mb-10">
           <div>
             <h1 className="text-3xl font-display font-bold text-white mb-2 tracking-tight">Welcome back, {profile.name}</h1>
-            <p className="text-slate-400 font-medium">Your ELO is looking strong today. Ready for your next block?</p>
+            <p className="text-slate-400 font-medium">Your ELO is looking strong today. Let's check your planner.</p>
           </div>
-          <Link href="/practice">
-            <Button variant="primary" neon className="uppercase tracking-widest font-bold shadow-[0_0_20px_rgba(0,216,232,0.4)]">
-              Start Today&apos;s Block
-            </Button>
-          </Link>
         </header>
         
         {/* ── Stats Row ── */}
@@ -60,18 +55,20 @@ export default function Home() {
             <div className="text-5xl font-display font-bold text-neon-blue mt-2 drop-shadow-[0_0_8px_rgba(0,216,232,0.6)]">{profile.overallElo}</div>
             {/* Progress to next tier */}
             {overallRank.eloToNextTier > 0 && (
-              <div className="mt-auto">
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-500">{overallRank.eloFloor} ELO</span>
-                  <span className="text-slate-500">{overallRank.eloCeiling} ELO</span>
+              <div className="mt-auto pt-2 relative">
+                <div className="flex justify-between text-xs mb-1.5 font-medium">
+                  <span className="text-slate-400">{overallRank.eloFloor}</span>
+                  <span className="text-slate-400">{overallRank.eloCeiling}</span>
                 </div>
-                <div className="w-full bg-navy-900/80 rounded-full h-1.5 overflow-hidden border border-navy-700">
+                <div className="w-full bg-navy-900/90 rounded-full h-3 overflow-hidden border border-navy-700 relative">
                   <div 
-                    className="bg-neon-blue h-full rounded-full transition-all duration-1000 shadow-[0_0_8px_rgba(0,216,232,0.6)]" 
+                    className="bg-gradient-to-r from-cyan-500 to-neon-blue h-full rounded-full transition-all duration-1000 shadow-[0_0_12px_rgba(0,216,232,0.8)] relative overflow-hidden" 
                     style={{ width: `${overallRank.progressInTier * 100}%` }} 
-                  />
+                  >
+                    <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.2)_50%,transparent_75%)] bg-[length:1rem_1rem] animate-[shimmer_1s_linear_infinite]" />
+                  </div>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">{overallRank.eloToNextTier} ELO to next tier</p>
+                <p className="text-xs text-neon-blue mt-2 font-semibold text-center uppercase tracking-widest">{overallRank.eloToNextTier} ELO to next tier</p>
               </div>
             )}
           </Card>
@@ -135,14 +132,20 @@ export default function Home() {
 
                   {/* Progress to next tier */}
                   {rank.eloToNextTier > 0 && (
-                    <div className="mt-auto">
-                      <div className="w-full bg-navy-900/80 rounded-full h-1.5 overflow-hidden border border-navy-700">
-                        <div 
-                          className="bg-neon-blue h-full rounded-full transition-all duration-1000 shadow-[0_0_6px_rgba(0,216,232,0.5)]" 
-                          style={{ width: `${rank.progressInTier * 100}%` }} 
-                        />
+                    <div className="mt-auto pt-2">
+                       <div className="flex justify-between text-[10px] mb-1 font-medium pb-0.5">
+                        <span className="text-slate-400">{rank.eloFloor}</span>
+                        <span className="text-slate-400">{rank.eloCeiling}</span>
                       </div>
-                      <p className="text-[10px] text-slate-500 mt-1">{rank.eloToNextTier} to next tier</p>
+                      <div className="w-full bg-navy-900/90 rounded-full h-2 overflow-hidden border border-navy-700 relative">
+                        <div 
+                          className={`bg-gradient-to-r ${cfg.gradient} h-full rounded-full transition-all duration-1000 shadow-[0_0_8px_rgba(255,255,255,0.3)] relative overflow-hidden`}
+                          style={{ width: `${rank.progressInTier * 100}%` }} 
+                        >
+                          <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.2)_50%,transparent_75%)] bg-[length:0.5rem_0.5rem] animate-[shimmer_1s_linear_infinite]" />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1.5 font-semibold text-center uppercase tracking-wider">{rank.eloToNextTier} to rank up</p>
                     </div>
                   )}
                 </Card>
