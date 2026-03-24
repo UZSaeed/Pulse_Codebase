@@ -1,14 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Home, Target, Calendar, BarChart2, Settings } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Home, Target, Calendar, BarChart2, Settings, LogOut } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 
 export const Sidebar = () => {
   const pathname = usePathname();
+  const router = useRouter();
 
   const getLinkClasses = (path: string) => {
-    const isActive = pathname === path || (path !== '/' && pathname.startsWith(path));
+    const isActive = pathname === path || (path !== '/dashboard' && pathname.startsWith(path));
     if (isActive) {
       return "group flex items-center gap-3 px-4 py-3 text-neon-blue bg-navy-700/60 rounded-xl transition-all duration-300 border border-neon-blue/40 shadow-[inset_0_0_12px_rgba(0,216,232,0.3)] font-bold tracking-wide";
     }
@@ -16,7 +18,7 @@ export const Sidebar = () => {
   };
 
   const getIconClasses = (path: string) => {
-    const isActive = pathname === path || (path !== '/' && pathname.startsWith(path));
+    const isActive = pathname === path || (path !== '/dashboard' && pathname.startsWith(path));
     if (isActive) {
       return "w-5 h-5 drop-shadow-[0_0_8px_rgba(0,216,232,0.8)]";
     }
@@ -30,12 +32,12 @@ export const Sidebar = () => {
           <div className="flex items-center gap-2 cursor-pointer">
             <img 
               src="/pulse_transparent.png" 
-              alt="Pulse Logo" 
+              alt="Spike Logo" 
               className="w-10 h-10 object-contain drop-shadow-[0_0_12px_rgba(0,216,232,0.5)]" 
             />
             <div className="flex items-center font-orbitron">
               <span className="text-2xl font-black tracking-tight text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]">
-                Pulse
+                Spike
               </span>
               <span className="text-2xl font-black tracking-tight text-neon-blue drop-shadow-[0_0_12px_rgba(0,216,232,0.8)]">
                 Prep
@@ -46,8 +48,8 @@ export const Sidebar = () => {
       </div>
       
       <nav className="flex-1 px-4 space-y-3 mt-8">
-        <Link href="/" className={getLinkClasses('/')}>
-          <Home className={getIconClasses('/')} />
+        <Link href="/dashboard" className={getLinkClasses('/dashboard')}>
+          <Home className={getIconClasses('/dashboard')} />
           <span>Dashboard</span>
         </Link>
         <Link href="/practice" className={getLinkClasses('/practice')}>
@@ -64,11 +66,22 @@ export const Sidebar = () => {
         </Link>
       </nav>
       
-      <div className="p-4 mb-2">
+      <div className="p-4 mb-2 space-y-2">
         <Link href="/settings" className={getLinkClasses('/settings')}>
           <Settings className={getIconClasses('/settings')} />
           <span>Settings</span>
         </Link>
+        <button
+          onClick={async () => {
+            const supabase = createClient();
+            await supabase.auth.signOut();
+            router.push('/landing');
+          }}
+          className="group flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all duration-300 border border-transparent hover:border-red-500/30 font-semibold tracking-wide w-full"
+        >
+          <LogOut className="w-5 h-5 group-hover:text-red-400 transition-colors" />
+          <span>Log Out</span>
+        </button>
       </div>
     </aside>
   );

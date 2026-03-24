@@ -8,7 +8,7 @@ import { useConfetti } from '@/hooks/useConfetti';
 import { playCorrectSound } from '@/lib/sounds';
 import CountUp from 'react-countup';
 import { MCAT_CHAPTERS } from '@/lib/chapters';
-import { SUBJECT_LABELS, type McatSubject, MCAT_SUBJECTS } from '@/lib/elo';
+import { SUBJECT_LABELS, type McatSubject, MCAT_SUBJECTS, RANK_COLORS } from '@/lib/elo';
 import { getSessionQuestions, type DummyQuestion } from '@/lib/dummy-questions';
 import {
   Loader2,
@@ -26,7 +26,11 @@ import {
   CheckCircle2,
   XCircle,
   ArrowLeft,
+  Flag,
 } from 'lucide-react';
+import { useUserProfile } from '@/context/UserProfileContext';
+import { LevelUpOverlay } from '@/components/ui/LevelUpOverlay';
+import { AITutorOverlay } from '@/components/practice/AITutorOverlay';
 
 // ─── Constants ───────────────────────────────────────────────────
 
@@ -37,13 +41,7 @@ const SUBJECT_CONFIG: Record<McatSubject, { label: string; gradient: string; ico
   psych_soc: { label: 'Psych/Soc', gradient: 'from-orange-500 to-yellow-400', icon: '🧠' },
 };
 
-// Mock user levels per subject
-const USER_LEVELS: Record<McatSubject, number> = {
-  chem_phys: 8,
-  cars: 5,
-  bio_biochem: 12,
-  psych_soc: 7,
-};
+
 
 // "Today's section" is determined dynamically (rotate daily)
 function getTodaySubject(): McatSubject {
@@ -58,6 +56,14 @@ function getTodaySubject(): McatSubject {
 export default function PracticePage() {
   const todaySubject = getTodaySubject();
   const { fireConfetti } = useConfetti();
+  const { profile } = useUserProfile();
+
+  // Level-up overlay state
+  const [showLevelUp, setShowLevelUp] = useState(false);
+  const [levelUpRank, setLevelUpRank] = useState(profile.overallRank);
+  const [levelUpXp, setLevelUpXp] = useState(0);
+  const [levelUpRankChanged, setLevelUpRankChanged] = useState(false);
+  const [levelUpOldRank, setLevelUpOldRank] = useState(profile.overallRank);
 
   // Session state
   const [sessionActive, setSessionActive] = useState(false);
@@ -72,6 +78,7 @@ export default function PracticePage() {
   const [manualCount, setManualCount] = useState(5);
   const [manualTopics, setManualTopics] = useState<string[]>([]);
 
+  const [draftAnswer, setDraftAnswer] = useState<string | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
@@ -106,6 +113,76 @@ export default function PracticePage() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
 
+  // Flag Modal state
+  const [flagModalQuestionId, setFlagModalQuestionId] = useState<string | null>(null);
+  const [flagReason, setFlagReason] = useState('inaccurate');
+  const [flagDetails, setFlagDetails] = useState('');
+  const [isSubmittingFlag, setIsSubmittingFlag] = useState(false);
+
+  const submitFlag = async () => {
+    if (!flagModalQuestionId) return;
+    setIsSubmittingFlag(true);
+    try {
+      await fetch('/api/questions/flag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionId: flagModalQuestionId,
+          userId: profile.id || 'anonymous_user',
+          reason: flagReason,
+          details: flagDetails,
+        })
+      });
+    } finally {
+      setIsSubmittingFlag(false);
+      setFlagModalQuestionId(null);
+      setFlagReason('inaccurate');
+      setFlagDetails('');
+    }
+  };
+
+  const renderFlagModal = () => {
+    if (!flagModalQuestionId) return null;
+    return (
+      <div className="fixed inset-0 z-[100] bg-navy-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-navy-800 border-navy-700 p-6 flex flex-col shadow-2xl">
+          <h2 className="text-xl font-bold text-white mb-2">Flag Question</h2>
+          <p className="text-slate-400 text-sm mb-6">Help us improve by telling us what is wrong with this question.</p>
+          
+          <div className="space-y-4 mb-6">
+            <select 
+              value={flagReason} 
+              onChange={e => setFlagReason(e.target.value)}
+              className="w-full bg-navy-900 border border-navy-700 rounded-lg p-3 text-white focus:outline-none focus:border-neon-blue/50"
+            >
+              <option value="inaccurate">Inaccurate / Wrong Answer</option>
+              <option value="poor_visual">Poor or confusing visual</option>
+              <option value="weird_wording">Weird or confusing wording</option>
+              <option value="too_easy">Way too easy / hard</option>
+              <option value="other">Other</option>
+            </select>
+            
+            <textarea 
+              value={flagDetails}
+              onChange={e => setFlagDetails(e.target.value)}
+              placeholder="Provide specific details (optional but helpful)..."
+              className="w-full bg-navy-900 border border-navy-700 rounded-lg p-3 text-white focus:outline-none focus:border-neon-blue/50 h-32 resize-none text-sm"
+            />
+          </div>
+          
+          <div className="flex gap-3 justify-end mt-auto">
+            <Button variant="ghost" onClick={() => setFlagModalQuestionId(null)} disabled={isSubmittingFlag}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={submitFlag} disabled={isSubmittingFlag}>
+              {isSubmittingFlag ? 'Submitting...' : 'Submit Feedback'}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  };
+
   // Animated progress bar
   const [progressWidth, setProgressWidth] = useState(0);
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -128,6 +205,7 @@ export default function PracticePage() {
     setSessionSubject(subject);
     setSessionQuestions(questions);
     setCurrentIndex(0);
+    setDraftAnswer(null);
     setSelectedAnswer(null);
     setShowExplanation(false);
     setCorrectCount(0);
@@ -139,12 +217,13 @@ export default function PracticePage() {
     setShowManualModal(false);
   }, []);
 
-  const submitAnswer = useCallback((label: string) => {
-    if (selectedAnswer || sessionQuestions.length === 0) return;
-    setSelectedAnswer(label);
+  const submitAnswer = useCallback((label: string | null = null) => {
+    const finalAnswer = label || draftAnswer;
+    if (!finalAnswer || selectedAnswer || sessionQuestions.length === 0) return;
+    setSelectedAnswer(finalAnswer);
 
     const question = sessionQuestions[currentIndex];
-    const correct = label === question.correctAnswer;
+    const correct = finalAnswer === question.correctAnswer;
 
     if (correct) {
       setCorrectCount((c) => c + 1);
@@ -152,12 +231,23 @@ export default function PracticePage() {
       fireConfetti();
     }
 
-    setSessionResults((prev) => [...prev, { question, userAnswer: label, correct }]);
+    setSessionResults((prev) => [...prev, { question, userAnswer: finalAnswer, correct }]);
     setShowExplanation(true);
-  }, [selectedAnswer, sessionQuestions, currentIndex, fireConfetti]);
+  }, [draftAnswer, selectedAnswer, sessionQuestions, currentIndex, fireConfetti]);
+
+  const handleSkipQuestion = useCallback(() => {
+    if (selectedAnswer || sessionQuestions.length === 0) return;
+    const question = sessionQuestions[currentIndex];
+    setSelectedAnswer('SKIP');
+    
+    // Marked as incorrect
+    setSessionResults((prev) => [...prev, { question, userAnswer: 'SKIP', correct: false }]);
+    setShowExplanation(true);
+  }, [selectedAnswer, sessionQuestions, currentIndex]);
 
   const nextQuestion = useCallback(() => {
     setCurrentIndex((i) => i + 1);
+    setDraftAnswer(null);
     setSelectedAnswer(null);
     setShowExplanation(false);
     setChatOpen(false);
@@ -169,6 +259,7 @@ export default function PracticePage() {
     setSessionSubject(null);
     setSessionQuestions([]);
     setCurrentIndex(0);
+    setDraftAnswer(null);
     setSelectedAnswer(null);
     setShowExplanation(false);
     setSessionResults([]);
@@ -345,9 +436,9 @@ export default function PracticePage() {
                   )}
 
                   <div className="mt-6 flex gap-3">
-                    <Button variant="outline" size="sm" onClick={() => { setReviewChatOpen(!reviewChatOpen); }}>
-                      <MessageCircle className="w-4 h-4 mr-2" />
-                      {reviewChatOpen ? 'Close Chat' : 'Ask about this'}
+                    <Button variant="outline" size="sm" onClick={() => setFlagModalQuestionId(question.id)}>
+                      <Flag className="w-4 h-4 mr-2" />
+                      Flag Question
                     </Button>
                     <div className="flex gap-2 ml-auto">
                       {reviewIndex > 0 && (
@@ -372,54 +463,6 @@ export default function PracticePage() {
                     </div>
                   </div>
                 </Card>
-
-                {/* Chat */}
-                {reviewChatOpen && (
-                  <Card className="bg-navy-800/80 backdrop-blur-sm">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Ask your AI tutor</h3>
-                    <div className="space-y-3 max-h-64 overflow-y-auto mb-4">
-                      {reviewChatMessages.length === 0 && (
-                        <p className="text-slate-500 text-sm italic">Ask anything about this question or the concepts behind it...</p>
-                      )}
-                      {reviewChatMessages.map((msg, i) => (
-                        <div key={i} className={`p-3 rounded-xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-neon-blue/10 text-neon-blue ml-8 border border-neon-blue/20' : 'bg-navy-900 text-slate-300 mr-8 border border-navy-700'}`}>
-                          {msg.text}
-                        </div>
-                      ))}
-                      {reviewChatLoading && (
-                        <div className="flex items-center gap-2 text-slate-400 text-sm ml-2">
-                          <Loader2 className="w-4 h-4 animate-spin" /> Thinking...
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        value={reviewChatInput}
-                        onChange={(e) => setReviewChatInput(e.target.value)}
-                        onKeyDown={async (e) => {
-                          if (e.key === 'Enter' && reviewChatInput.trim()) {
-                            const msg = reviewChatInput.trim();
-                            setReviewChatInput('');
-                            setReviewChatMessages(prev => [...prev, { role: 'user', text: msg }]);
-                            setReviewChatLoading(true);
-                            try {
-                              const res = await fetch('/api/questions/explain', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ questionStem: question.stem, explanation: question.explanation, userMessage: msg }),
-                              });
-                              const data = await res.json();
-                              setReviewChatMessages(prev => [...prev, { role: 'assistant', text: data.reply ?? 'No response.' }]);
-                            } catch { setReviewChatMessages(prev => [...prev, { role: 'assistant', text: 'Could not reach tutor.' }]); }
-                            setReviewChatLoading(false);
-                          }
-                        }}
-                        placeholder="Why is option B wrong?"
-                        className="flex-1 bg-navy-900 border border-navy-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-neon-blue/60 transition-colors"
-                      />
-                    </div>
-                  </Card>
-                )}
               </div>
 
               {/* Right side info */}
@@ -446,7 +489,14 @@ export default function PracticePage() {
               </div>
             </div>
           </div>
+          <AITutorOverlay 
+            questionStem={question.stem} 
+            explanation={question.explanation} 
+            passage={question.passage} 
+            choices={question.choices} 
+          />
         </main>
+        {renderFlagModal()}
       </div>
     );
   };
@@ -612,7 +662,13 @@ export default function PracticePage() {
               <span className="text-slate-600">•</span>
               <span className="text-slate-400 text-sm font-medium">{question.topic}</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={exitSession}>✕ Exit Session</Button>
+            
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-sm text-slate-400 font-bold bg-navy-800/50 px-3 py-1.5 rounded-full border border-navy-700 shadow-sm">
+                <span className="text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">🔥 {(profile as any).streak || 12} day streak</span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={exitSession}>✕ Exit Session</Button>
+            </div>
           </div>
 
           {/* ── Question content ── */}
@@ -632,33 +688,72 @@ export default function PracticePage() {
                     {question.choices.map((choice) => {
                       let choiceStyle = 'border-navy-700 hover:border-neon-blue/60 hover:bg-navy-700/50 cursor-pointer';
                       let indicator = null;
+                      
+                      const isDraft = draftAnswer === choice.label && !selectedAnswer;
 
                       if (selectedAnswer) {
                         if (choice.label === question.correctAnswer) {
                           choiceStyle = 'border-emerald-500 bg-emerald-500/15 ring-2 ring-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]';
                           indicator = <span className="text-emerald-400 font-bold text-xs ml-auto shrink-0">✓ CORRECT</span>;
-                        } else if (choice.label === selectedAnswer && !isCorrect) {
+                        } else if (choice.label === selectedAnswer && !isCorrect && selectedAnswer !== 'SKIP') {
                           choiceStyle = 'border-red-500 bg-red-500/15 ring-2 ring-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.2)]';
                           indicator = <span className="text-red-400 font-bold text-xs ml-auto shrink-0">✗ INCORRECT</span>;
                         } else {
                           choiceStyle = 'border-navy-700 opacity-40';
                         }
+                      } else if (isDraft) {
+                        choiceStyle = 'border-neon-blue bg-neon-blue/5';
                       }
 
                       return (
                         <button
                           key={choice.label}
-                          onClick={() => submitAnswer(choice.label)}
+                          onClick={() => !selectedAnswer && setDraftAnswer(choice.label)}
                           disabled={!!selectedAnswer}
                           className={`w-full text-left px-5 py-4 rounded-xl border transition-all duration-300 flex items-center gap-4 ${choiceStyle}`}
                         >
-                          <span className="font-bold text-neon-blue text-sm min-w-[20px]">{choice.label}.</span>
-                          <span className="text-slate-200 text-[15px] leading-relaxed flex-1">{choice.text}</span>
+                          <div className={`w-5 h-5 rounded-full border flex flex-shrink-0 items-center justify-center ${
+                            isDraft && !selectedAnswer ? 'border-neon-blue bg-neon-blue/20' : 
+                            selectedAnswer && choice.label === question.correctAnswer ? 'border-emerald-500 bg-emerald-500/20' :
+                            selectedAnswer && choice.label === selectedAnswer ? 'border-red-500 bg-red-500/20' :
+                            'border-slate-600'
+                          }`}>
+                            {(isDraft && !selectedAnswer) && <span className="w-2.5 h-2.5 rounded-full bg-neon-blue" />}
+                            {(selectedAnswer && choice.label === question.correctAnswer) && <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />}
+                            {(selectedAnswer && choice.label === selectedAnswer && !isCorrect && selectedAnswer !== 'SKIP') && <span className="w-2.5 h-2.5 rounded-full bg-red-500" />}
+                          </div>
+                          <span className={`${isDraft && !selectedAnswer ? 'text-white font-medium' : selectedAnswer ? 'font-medium' : 'text-slate-200'} text-[15px] leading-relaxed flex-1`}>{choice.text}</span>
                           {indicator}
                         </button>
                       );
                     })}
                   </div>
+
+                  {/* Submission Buttons */}
+                  {!showExplanation && (
+                    <div className="mt-8 pt-6 flex flex-col sm:flex-row gap-4 justify-between items-center w-full border-t border-navy-800">
+                      <Button 
+                        variant="outline" 
+                        className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-slate-400 font-medium border-navy-700 bg-navy-800/30 hover:bg-navy-800 hover:text-white"
+                        onClick={handleSkipQuestion}
+                        disabled={!!selectedAnswer}
+                      >
+                        Skip Question
+                      </Button>
+                      <Button 
+                        variant="primary" 
+                        className={`w-full sm:w-auto px-8 py-2.5 rounded-xl font-bold transition-all ${
+                          draftAnswer 
+                            ? 'bg-neon-blue text-navy-900 shadow-[0_0_20px_rgba(0,216,232,0.4)] hover:shadow-[0_0_30px_rgba(0,216,232,0.6)]' 
+                            : 'bg-navy-700 text-slate-500 cursor-not-allowed opacity-70'
+                        }`}
+                        onClick={() => draftAnswer && submitAnswer()}
+                        disabled={!draftAnswer || !!selectedAnswer}
+                      >
+                        Submit Answer
+                      </Button>
+                    </div>
+                  )}
                 </Card>
 
                 {/* ── Explanation ── */}
@@ -695,60 +790,21 @@ export default function PracticePage() {
                     </div>
 
                     <div className="mt-6 flex gap-3">
-                      <Button variant="outline" size="sm" onClick={() => setChatOpen(!chatOpen)}>
-                        <MessageCircle className="w-4 h-4 mr-2" />
-                        {chatOpen ? 'Close Chat' : 'Ask about this'}
+                      <Button variant="outline" size="sm" onClick={() => setFlagModalQuestionId(question.id)}>
+                        <Flag className="w-4 h-4 mr-2" />
+                        Flag Question
                       </Button>
-                      {isLastQuestion ? (
-                        <Button variant="primary" size="sm" neon onClick={nextQuestion}>
-                          Finish Session →
-                        </Button>
-                      ) : (
-                        <Button variant="primary" size="sm" onClick={nextQuestion}>
-                          Next Question →
-                        </Button>
-                      )}
-                    </div>
-                  </Card>
-                )}
-
-                {/* ── Chat ── */}
-                {chatOpen && (
-                  <Card className="bg-navy-800/80 backdrop-blur-sm">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Ask your AI tutor</h3>
-                    <div className="space-y-3 max-h-64 overflow-y-auto mb-4">
-                      {chatMessages.length === 0 && (
-                        <p className="text-slate-500 text-sm italic">Ask anything about this question or the concepts behind it...</p>
-                      )}
-                      {chatMessages.map((msg, i) => (
-                        <div
-                          key={i}
-                          className={`p-3 rounded-xl text-sm leading-relaxed ${
-                            msg.role === 'user'
-                              ? 'bg-neon-blue/10 text-neon-blue ml-8 border border-neon-blue/20'
-                              : 'bg-navy-900 text-slate-300 mr-8 border border-navy-700'
-                          }`}
-                        >
-                          {msg.text}
-                        </div>
-                      ))}
-                      {chatLoading && (
-                        <div className="flex items-center gap-2 text-slate-400 text-sm ml-2">
-                          <Loader2 className="w-4 h-4 animate-spin" /> Thinking...
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && sendChatMessage()}
-                        placeholder="Why is option B wrong?"
-                        className="flex-1 bg-navy-900 border border-navy-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-neon-blue/60 transition-colors"
-                      />
-                      <Button variant="primary" size="sm" onClick={sendChatMessage} disabled={chatLoading}>
-                        <Send className="w-4 h-4" />
-                      </Button>
+                      <div className="flex gap-2 ml-auto">
+                        {isLastQuestion ? (
+                          <Button variant="primary" size="sm" neon onClick={nextQuestion}>
+                            Finish Session →
+                          </Button>
+                        ) : (
+                          <Button variant="primary" size="sm" onClick={nextQuestion}>
+                            Next Question →
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </Card>
                 )}
@@ -763,10 +819,21 @@ export default function PracticePage() {
                   <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">Correct</p>
                 </Card>
 
-                {selectedAnswer && (
+                {selectedAnswer && selectedAnswer !== 'SKIP' && (
                   <Card className={`text-center py-4 transition-all duration-300 ${isCorrect ? 'border-emerald-500/30' : 'border-red-500/30'}`}>
                     <div className={`text-2xl font-display font-bold mb-1 ${isCorrect ? 'text-emerald-400' : 'text-red-400'}`}>
                       {isCorrect ? '🎯 Correct!' : '❌ Incorrect'}
+                    </div>
+                    <p className="text-slate-400 text-sm">
+                      Answer: <span className="font-bold text-white">{question.correctAnswer}</span>
+                    </p>
+                  </Card>
+                )}
+                
+                {selectedAnswer === 'SKIP' && (
+                  <Card className="text-center py-4 transition-all duration-300 border-slate-500/30">
+                    <div className="text-2xl font-display font-bold mb-1 text-slate-400">
+                      ⏭️ Skipped
                     </div>
                     <p className="text-slate-400 text-sm">
                       Answer: <span className="font-bold text-white">{question.correctAnswer}</span>
@@ -794,7 +861,16 @@ export default function PracticePage() {
               </div>
             </div>
           </div>
+          {showExplanation && (
+            <AITutorOverlay 
+              questionStem={question.stem} 
+              explanation={question.explanation} 
+              passage={question.passage} 
+              choices={question.choices}
+            />
+          )}
         </main>
+        {renderFlagModal()}
       </div>
     );
   }
@@ -803,7 +879,8 @@ export default function PracticePage() {
 
   const todayCfg = SUBJECT_CONFIG[todaySubject];
   const _todayChapters = MCAT_CHAPTERS[todaySubject];
-  const todayLevel = USER_LEVELS[todaySubject];
+  const todayRank = profile.subjects[todaySubject].rank;
+  const todayRankColors = RANK_COLORS[todayRank.rank];
   const todayQuestionsRemaining = 10; // Mock value
 
   return (
@@ -824,7 +901,7 @@ export default function PracticePage() {
               </h1>
               <p className="text-white/70 text-sm flex items-center gap-4">
                 <span className="flex items-center gap-1.5">
-                  <Trophy className="w-4 h-4" /> Level {todayLevel}
+                  <span>{todayRank.icon}</span> {todayRank.displayName} — {profile.subjects[todaySubject].elo} ELO
                 </span>
                 <span className="flex items-center gap-1.5">
                   <BookOpen className="w-4 h-4" /> {todayQuestionsRemaining} questions remaining
@@ -847,15 +924,16 @@ export default function PracticePage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           {(Object.entries(SUBJECT_CONFIG) as [McatSubject, typeof SUBJECT_CONFIG[McatSubject]][]).map(
             ([key, cfg]) => {
-              const level = USER_LEVELS[key];
               const chapters = MCAT_CHAPTERS[key];
+              const subRank = profile.subjects[key].rank;
+              const subColors = RANK_COLORS[subRank.rank];
               return (
                 <Card
                   key={key}
                   className="group p-6 hover:border-neon-blue/50 transition-all duration-300 hover:-translate-y-0.5 cursor-pointer"
                   neonHighlight={key === todaySubject}
                 >
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">{cfg.icon}</span>
                       <div>
@@ -865,11 +943,22 @@ export default function PracticePage() {
                         <p className="text-slate-500 text-xs font-medium">{chapters.length} chapters</p>
                       </div>
                     </div>
-                    <div className="text-right flex items-baseline gap-1.5 justify-end mt-1">
-                      <span className="text-xs text-slate-500 uppercase tracking-wider font-bold">Level</span>
-                      <div className="text-2xl font-display font-bold text-white">{level}</div>
+                    <div className={`bg-gradient-to-r ${subColors.gradient} ${subColors.text} text-xs font-bold px-2.5 py-1 rounded-lg tracking-wide flex items-center gap-1 ${subColors.shadow}`}>
+                      <span className="text-sm">{subRank.icon}</span> {subRank.displayName}
                     </div>
                   </div>
+                  <div className="flex items-baseline gap-2 mb-2">
+                    <span className="text-2xl font-display font-bold text-white">{profile.subjects[key].elo}</span>
+                    <span className="text-xs text-slate-500 font-bold uppercase">ELO</span>
+                  </div>
+                  {subRank.eloToNextTier > 0 && (
+                    <div className="mb-3">
+                      <div className="w-full bg-navy-900/80 rounded-full h-1.5 overflow-hidden border border-navy-700">
+                        <div className="bg-neon-blue h-full rounded-full transition-all duration-500 shadow-[0_0_6px_rgba(0,216,232,0.5)]" style={{ width: `${subRank.progressInTier * 100}%` }} />
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1">{subRank.eloToNextTier} ELO to next tier</p>
+                    </div>
+                  )}
 
                   <Button
                     variant="outline"

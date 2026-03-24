@@ -1,5 +1,5 @@
 /**
- * SM-2 Spaced Repetition Algorithm for Pulse MCAT Prep
+ * SM-2 Spaced Repetition Algorithm for Spike MCAT Prep
  *
  * Implements the SuperMemo SM-2 algorithm to schedule review intervals.
  * Each micro-concept (tied to a question) maintains:
@@ -30,7 +30,7 @@ export interface SrsUpdateResult extends SrsState {
  *   4 - Correct after hesitation
  *   5 - Perfect response
  *
- * For Pulse we simplify to binary correct/incorrect plus optional confidence:
+ * For Spike we simplify to binary correct/incorrect plus optional confidence:
  *   - Incorrect  → quality 1
  *   - Correct    → quality 4 (default) or 5 if answered quickly
  */

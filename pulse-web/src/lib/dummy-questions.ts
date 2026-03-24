@@ -1,5 +1,5 @@
 /**
- * Dummy Question Bank for Pulse MCAT Prep
+ * Dummy Question Bank for Spike MCAT Prep
  *
  * Provides pre-built questions across all 4 MCAT subjects, tagged by
  * subject AND chapter, for testing without an OpenAI API key.

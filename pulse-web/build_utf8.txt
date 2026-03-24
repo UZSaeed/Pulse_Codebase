@@ -1,0 +1,35 @@
+
+> pulse-web@0.1.0 build
+> next build
+
+▲ Next.js 16.2.1 (Turbopack)
+- Environments: .env
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 1 errors:
+./node_modules/react-slider/dist/es/prod/components/ReactSlider/ReactSlider.mjs:1:1
+Module not found: Can't resolve '@babel/runtime/helpers/inheritsLoose'
+[31m[1m>[0m [90m1 |[0m [36mimport[0m e [36mfrom[0m[32m"@babel/runtime/helpers/inheritsLoose"[0m;[36mimport[0m t [36mfrom[0m[32m"react"[0m;[36mfunction[0m s(e){[36mretu..[0m.
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m2 |[0m
+
+
+
+Import traces:
+  Client Component Browser:
+    ./node_modules/react-slider/dist/es/prod/components/ReactSlider/ReactSlider.mjs [Client Component Browser]
+    ./src/app/settings/page.tsx [Client Component Browser]
+    ./src/app/settings/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./node_modules/react-slider/dist/es/prod/components/ReactSlider/ReactSlider.mjs [Client Component SSR]
+    ./src/app/settings/page.tsx [Client Component SSR]
+    ./src/app/settings/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)

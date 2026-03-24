@@ -14,12 +14,16 @@ export async function POST(request: NextRequest) {
     const {
       questionStem,
       explanation,
+      passage,
+      choices,
       userMessage,
       tokensUsedThisMonth = 0,
       monthlyTokenBudget = 500_000,
     } = body as {
       questionStem: string;
       explanation: string;
+      passage?: string | null;
+      choices?: any;
       userMessage: string;
       tokensUsedThisMonth?: number;
       monthlyTokenBudget?: number;
@@ -39,6 +43,8 @@ export async function POST(request: NextRequest) {
     const reply = await explainChat(apiKey, {
       questionStem,
       explanation,
+      passage,
+      choices,
       userMessage,
       modelTier: modelTier === 'premium' ? 'economy' : 'economy', // always economy for chat
     });

@@ -11,6 +11,8 @@ import {
   selectModelTier,
   type GenerateQuestionOptions,
 } from '@/lib/ai';
+import { checkAndExpandQuestionBank } from '@/lib/question-bank';
+import { prisma } from '@/lib/prisma';
 import type { McatSubject } from '@/lib/elo';
 
 export async function POST(request: NextRequest) {
@@ -42,6 +44,39 @@ export async function POST(request: NextRequest) {
 
     const modelTier = selectModelTier(tokensUsedThisMonth, monthlyTokenBudget);
 
+    // 1. Asynchronously trigger DB expansion so the global bank grows up to its cap
+    if (topic) {
+      checkAndExpandQuestionBank(subject, topic).catch((e) => console.error('[BankExpand]', e));
+    }
+
+    // 2. Try to fetch an existing question to save tokens
+    if (topic) {
+      const count = await prisma.question.count({ where: { topic } });
+      if (count > 0) {
+        const skip = Math.floor(Math.random() * count);
+        const randomQ = await prisma.question.findFirst({
+          where: { topic },
+          skip
+        });
+        if (randomQ) {
+          // Map DB question format to GeneratedQuestion structure
+          const formattedQ = {
+            subject: randomQ.subject,
+            topic: randomQ.topic || '',
+            passage: randomQ.passage || null,
+            stem: randomQ.text,
+            choices: randomQ.choices ? JSON.parse(randomQ.choices) : [],
+            correctAnswer: randomQ.correctAnswer || 'A',
+            explanation: randomQ.explanation,
+            distractorExplanations: randomQ.distractorExplanations ? JSON.parse(randomQ.distractorExplanations) : undefined,
+            difficulty: randomQ.baseDifficulty,
+          };
+          return NextResponse.json({ question: formattedQ, modelTier });
+        }
+      }
+    }
+
+    // 3. Fallback: generate a new one inline if DB is empty
     const opts: GenerateQuestionOptions = {
       subject,
       topic,
@@ -51,6 +86,21 @@ export async function POST(request: NextRequest) {
     };
 
     const question = await generateQuestion(apiKey, opts);
+
+    // Save fallback to DB
+    await prisma.question.create({
+      data: {
+        subject: question.subject,
+        topic: question.topic,
+        passage: question.passage,
+        text: question.stem,
+        choices: JSON.stringify(question.choices),
+        correctAnswer: question.correctAnswer,
+        explanation: question.explanation,
+        distractorExplanations: question.distractorExplanations ? JSON.stringify(question.distractorExplanations) : null,
+        baseDifficulty: question.difficulty,
+      }
+    });
 
     return NextResponse.json({ question, modelTier });
   } catch (err: unknown) {

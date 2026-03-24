@@ -4,32 +4,67 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
-  id               String            @id @default(uuid())
+  id               String            @id  // Supabase auth.users.id
   email            String            @unique
   name             String?
-  createdAt        DateTime          @default(now())
+  image            String?           // Google profile picture
   updatedAt        DateTime          @updatedAt
   subscriptionTier String            @default("FREE")
-  eloRatings       Json?             // Stores ELO per subject
-  xp               Int               @default(0)
+  dailyStreak      Int               @default(0)
+  lastPracticeDate DateTime?
+  totalXp          Int               @default(0)
   performances     UserPerformance[]
   calendarState    CalendarState?
+  subjectStats     SubjectStats[]
+  topicStats       TopicStats[]
+  questionFlags    QuestionFlag[]
+  onboardingCompleted Boolean @default(false)
+  preferences      UserPreference?
+}
+
+model SubjectStats {
+  id        String   @id @default(uuid())
+  userId    String
+  subject   String   // chem_phys, cars, bio_biochem, psych_soc
+  elo       Int      @default(1500)
+  xp        Int      @default(0)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subject])
+}
+
+model TopicStats {
+  id        String   @id @default(uuid())
+  userId    String
+  subject   String   // chem_phys, cars, bio_biochem, psych_soc
+  topicName String
+  elo       Int      @default(1500)
+  xp        Int      @default(0)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subject, topicName])
 }
 
 model Question {
   id            String   @id @default(uuid())
   subject       String
-  text          String
+  topic         String?
+  chapterId     String?
+  passage       String?
+  text          String   // This can act as the 'stem'
+  choices       String?  // JSON string storing choices array
+  correctAnswer String?  // e.g., 'A', 'B', 'C', 'D'
   explanation   String
+  distractorExplanations String? // JSON string
   baseDifficulty Int     @default(1500)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   
   performances  UserPerformance[]
+  flags         QuestionFlag[]
 }
 
 model UserPerformance {
@@ -59,4 +94,35 @@ model CalendarState {
   updatedAt    DateTime @updatedAt
 
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model QuestionFlag {
+  id         String   @id @default(uuid())
+  userId     String
+  questionId String
+  reason     String   // "inaccurate", "poor_visual", "weird_wording", "other"
+  details    String?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model UserPreference {
+  id                         String   @id @default(uuid())
+  userId                     String   @unique
+  testDate                   DateTime?
+  
+  // Phase splits (percentages adding up to 100)
+  rampUpPercentage           Int      @default(30)
+  grindPercentage            Int      @default(50)
+  lastStretchPercentage      Int      @default(20)
+
+  // Questions per day targets
+  rampUpQuestionsPerDay      Int      @default(30)
+  grindQuestionsPerDay       Int      @default(60)
+  lastStretchQuestionsPerDay Int      @default(90)
+
+  updatedAt                  DateTime @updatedAt
+  user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -12,11 +12,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateElo } from '@/lib/elo';
 import { calculateSrs, mapToQuality, defaultSrsState, type SrsState } from '@/lib/srs';
+import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      userId,
+      questionId,
+      subject,
+      topicName,
       userElo = 1500,
       questionElo = 1500,
       isCorrect,
@@ -24,6 +29,10 @@ export async function POST(request: NextRequest) {
       srsState,
       timeTakenMs,
     } = body as {
+      userId?: string;
+      questionId?: string;
+      subject?: string;
+      topicName?: string;
       userElo?: number;
       questionElo?: number;
       isCorrect: boolean;
@@ -44,6 +53,47 @@ export async function POST(request: NextRequest) {
     const baseXp = isCorrect ? 25 : 5;
     const eloBonus = isCorrect && eloResult.eloChange > 15 ? 10 : 0;
     const xpAwarded = baseXp + eloBonus;
+
+    // Persist if user is logged in
+    if (userId && questionId) {
+      await prisma.userPerformance.create({
+        data: {
+          userId,
+          questionId,
+          isCorrect,
+          timeTakenMs,
+          eloChange: eloResult.eloChange,
+          srsInterval: srsResult.interval,
+          srsRepetitions: srsResult.repetitions,
+          srsEaseFactor: srsResult.easeFactor,
+          nextReviewDate: (() => {
+            const d = new Date();
+            d.setDate(d.getDate() + Math.max(1, srsResult.interval));
+            return d;
+          })()
+        }
+      });
+
+      // Lazily upsert TopicStats
+      if (topicName && subject) {
+        await prisma.topicStats.upsert({
+          where: {
+            userId_subject_topicName: { userId, subject, topicName }
+          },
+          update: {
+            elo: { increment: eloResult.eloChange },
+            xp: { increment: xpAwarded }
+          },
+          create: {
+            userId,
+            subject,
+            topicName,
+            elo: 1500 + eloResult.eloChange,
+            xp: xpAwarded
+          }
+        });
+      }
+    }
 
     return NextResponse.json({
       elo: eloResult,
