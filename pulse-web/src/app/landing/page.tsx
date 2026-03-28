@@ -80,7 +80,7 @@ function WaitlistForm({ id, variant = 'hero' }: { id: string; variant?: 'hero' |
 
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-lg mx-auto">
-      <div className={`relative flex items-center gap-2 rounded-2xl border transition-all duration-300 ${
+      <div className={`relative flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-2xl border transition-all duration-300 ${
         variant === 'hero'
           ? 'bg-navy-800/80 border-navy-700 hover:border-neon-blue/40 focus-within:border-neon-blue/60 focus-within:shadow-[0_0_30px_rgba(0,216,232,0.15)] p-2'
           : 'bg-navy-900/80 border-navy-700 hover:border-neon-blue/40 focus-within:border-neon-blue/60 focus-within:shadow-[0_0_30px_rgba(0,216,232,0.15)] p-2'
@@ -93,12 +93,12 @@ function WaitlistForm({ id, variant = 'hero' }: { id: string; variant?: 'hero' |
           onChange={(e) => { setEmail(e.target.value); setStatus('idle'); }}
           placeholder="Enter your email for early access"
           required
-          className="flex-1 bg-transparent text-white placeholder:text-slate-500 px-4 py-3 text-sm md:text-base outline-none font-medium"
+          className="flex-1 w-full min-w-0 bg-transparent text-white placeholder:text-slate-500 px-4 py-3 text-sm md:text-base outline-none font-medium"
         />
         <button
           type="submit"
           disabled={status === 'loading'}
-          className="shrink-0 bg-neon-blue text-navy-900 font-bold text-sm px-6 py-3 rounded-xl hover:shadow-[0_0_24px_rgba(0,216,232,0.5)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+          className="shrink-0 w-full sm:w-auto bg-neon-blue text-navy-900 font-bold text-sm px-6 py-3 rounded-xl hover:shadow-[0_0_24px_rgba(0,216,232,0.5)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {status === 'loading' ? (
             <>
@@ -179,7 +179,7 @@ export default function LandingPage() {
       </nav>
 
       {/* ── Hero ── */}
-      <section className="relative max-w-7xl mx-auto px-8 pt-20 pb-32">
+      <section className="relative max-w-7xl mx-auto px-4 sm:px-8 pt-20 pb-32">
         {/* Glow orbs */}
         <div className="absolute top-10 left-1/4 w-96 h-96 bg-neon-blue/10 rounded-full blur-[128px] pointer-events-none" />
         <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-purple-500/10 rounded-full blur-[120px] pointer-events-none" />
@@ -376,8 +376,8 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA ── */}
-      <section className="relative max-w-4xl mx-auto px-8 pb-24 text-center">
-        <div className="p-12 rounded-3xl border border-navy-700 bg-gradient-to-b from-navy-800 to-navy-900 relative overflow-hidden">
+      <section className="relative max-w-4xl mx-auto px-4 sm:px-8 pb-24 text-center">
+        <div className="p-6 sm:p-12 rounded-3xl border border-navy-700 bg-gradient-to-b from-navy-800 to-navy-900 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-neon-blue/5 to-purple-500/5" />
           <div className="relative z-10">
             <h2 className="text-3xl font-display font-bold mb-4 tracking-tight">Ready to rank up?</h2>
