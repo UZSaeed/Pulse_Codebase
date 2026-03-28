@@ -33,7 +33,7 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Public routes that don't need auth
-  const publicRoutes = ['/landing', '/login', '/signup', '/auth'];
+  const publicRoutes = ['/landing', '/testing', '/signup', '/auth'];
   const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
   const isApiRoute = pathname.startsWith('/api');
   const isStaticAsset = pathname.startsWith('/_next') || pathname.includes('.');
@@ -59,7 +59,7 @@ export async function updateSession(request: NextRequest) {
   // Protected routes: redirect to login if not authenticated
   if (!user) {
     const url = request.nextUrl.clone();
-    url.pathname = '/login';
+    url.pathname = '/landing';
     return NextResponse.redirect(url);
   }
 

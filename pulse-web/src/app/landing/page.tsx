@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 const FEATURES = [
   {
@@ -30,9 +29,102 @@ const FEATURES = [
   },
 ];
 
+function WaitlistForm({ id, variant = 'hero' }: { id: string; variant?: 'hero' | 'cta' }) {
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error' | 'duplicate'>('idle');
+  const [message, setMessage] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+
+    setStatus('loading');
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+
+      if (res.status === 201) {
+        setStatus('success');
+        setMessage(data.message);
+        setEmail('');
+      } else if (res.status === 200) {
+        setStatus('duplicate');
+        setMessage(data.message);
+      } else {
+        setStatus('error');
+        setMessage(data.error || 'Something went wrong.');
+      }
+    } catch {
+      setStatus('error');
+      setMessage('Network error. Please try again.');
+    }
+  };
+
+  if (status === 'success' || status === 'duplicate') {
+    return (
+      <div className={`flex items-center justify-center gap-3 px-6 py-4 rounded-2xl border ${
+        status === 'success'
+          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+          : 'bg-neon-blue/10 border-neon-blue/30 text-neon-blue'
+      } animate-fade-in`}>
+        <span className="text-2xl">{status === 'success' ? '🎉' : '✨'}</span>
+        <span className="font-semibold text-sm md:text-base">{message}</span>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="w-full max-w-lg mx-auto">
+      <div className={`relative flex items-center gap-2 rounded-2xl border transition-all duration-300 ${
+        variant === 'hero'
+          ? 'bg-navy-800/80 border-navy-700 hover:border-neon-blue/40 focus-within:border-neon-blue/60 focus-within:shadow-[0_0_30px_rgba(0,216,232,0.15)] p-2'
+          : 'bg-navy-900/80 border-navy-700 hover:border-neon-blue/40 focus-within:border-neon-blue/60 focus-within:shadow-[0_0_30px_rgba(0,216,232,0.15)] p-2'
+      }`}>
+        <input
+          ref={inputRef}
+          id={id}
+          type="email"
+          value={email}
+          onChange={(e) => { setEmail(e.target.value); setStatus('idle'); }}
+          placeholder="Enter your email for early access"
+          required
+          className="flex-1 bg-transparent text-white placeholder:text-slate-500 px-4 py-3 text-sm md:text-base outline-none font-medium"
+        />
+        <button
+          type="submit"
+          disabled={status === 'loading'}
+          className="shrink-0 bg-neon-blue text-navy-900 font-bold text-sm px-6 py-3 rounded-xl hover:shadow-[0_0_24px_rgba(0,216,232,0.5)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {status === 'loading' ? (
+            <>
+              <div className="w-4 h-4 border-2 border-navy-900/40 border-t-navy-900 rounded-full animate-spin" />
+              Joining...
+            </>
+          ) : (
+            'Join Beta'
+          )}
+        </button>
+      </div>
+
+      {status === 'error' && (
+        <p className="text-red-400 text-sm mt-3 text-center animate-fade-in">{message}</p>
+      )}
+
+      <p className="text-slate-500 text-xs mt-3 text-center">
+        We&apos;ll never spam you. Unsubscribe anytime.
+      </p>
+    </form>
+  );
+}
+
 export default function LandingPage() {
   const [mounted, setMounted] = useState(false);
-  
+
   // Typewriter effect state
   const WORDS = ["Level Up", "Win", "Spike."];
   const [wordIndex, setWordIndex] = useState(0);
@@ -78,16 +170,11 @@ export default function LandingPage() {
           <span className="text-2xl font-black tracking-tight text-white">Spike</span>
           <span className="text-2xl font-black tracking-tight text-neon-blue drop-shadow-[0_0_12px_rgba(0,216,232,0.8)]">Prep</span>
         </div>
-        <div className="flex items-center gap-4">
-          <Link href="/login" className="text-sm font-semibold text-slate-400 hover:text-white transition-colors px-4 py-2">
-            Log In
-          </Link>
-          <Link
-            href="/login"
-            className="bg-neon-blue text-navy-900 font-bold text-sm px-6 py-2.5 rounded-xl hover:shadow-[0_0_24px_rgba(0,216,232,0.6)] transition-all duration-300 hover:-translate-y-0.5"
-          >
-            Get Started
-          </Link>
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-wider">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            Invite-Only Beta
+          </div>
         </div>
       </nav>
 
@@ -115,20 +202,13 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-xl text-slate-400 leading-relaxed max-w-2xl mx-auto mb-10">
-            Test-accurate rigor meets adaptive engagement. AI-generated, ELO-matched questions 
-            with spaced repetition — infinite adaptive practice that makes studying 
+            Test-accurate rigor meets adaptive engagement. AI-generated, ELO-matched questions
+            with spaced repetition — infinite adaptive practice that makes studying
             <span className="text-white font-semibold"> actually addictive</span>.
           </p>
 
-          <div className="flex items-center justify-center gap-4">
-            <Link
-              href="/login"
-              className="group relative bg-neon-blue text-navy-900 font-bold text-lg px-10 py-4 rounded-2xl hover:shadow-[0_0_40px_rgba(0,216,232,0.5)] transition-all duration-300 hover:-translate-y-1"
-            >
-              Start Practicing Free
-              <span className="absolute inset-0 rounded-2xl bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            </Link>
-          </div>
+          {/* Email capture form */}
+          <WaitlistForm id="hero-waitlist" variant="hero" />
 
           {/* Social proof */}
           <div className="mt-12 flex items-center justify-center gap-8 text-sm text-slate-500">
@@ -167,12 +247,12 @@ export default function LandingPage() {
               {/* Left Panel: Question */}
               <div className="flex-1 p-6 md:p-10 flex flex-col items-start text-left">
                 <div className="flex items-center justify-between w-full mb-8">
-                  <span className="text-xs font-bold uppercase tracking-widest text-neon-blue bg-neon-blue/10 px-3 py-1.5 rounded-full border border-neon-blue/20">Biology & Biochem</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-neon-blue bg-neon-blue/10 px-3 py-1.5 rounded-full border border-neon-blue/20">Biology &amp; Biochem</span>
                   <div className="flex items-center gap-2 text-sm text-slate-400 font-bold bg-navy-800/50 px-3 py-1.5 rounded-full border border-navy-700">
                     <span className="text-amber-400">🔥 12 day streak</span>
                   </div>
                 </div>
-                
+
                 <h3 className="text-2xl font-bold text-white mb-4">Question 14 of 59</h3>
                 <p className="text-slate-300 mb-8 leading-relaxed text-lg text-left">
                   Which of the following would most likely diminish the effect of an enzyme that exhibits cooperative binding?
@@ -199,7 +279,7 @@ export default function LandingPage() {
               {/* Right Panel: AI Tutor & Stats */}
               <div className="w-full md:w-[360px] bg-navy-800/20 border-l border-navy-800 p-6 flex flex-col relative overflow-hidden text-left">
                 <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/10 rounded-full blur-[60px] pointer-events-none" />
-                
+
                 {/* Rank Stats */}
                 <div className="relative z-10 p-5 rounded-2xl bg-navy-900/80 border border-navy-700 mb-6 shadow-lg">
                   <div className="flex items-center justify-between mb-3">
@@ -228,10 +308,10 @@ export default function LandingPage() {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="p-4 flex-1 flex flex-col gap-4 text-[13px] overflow-hidden">
                     <div className="bg-navy-800/80 p-3.5 rounded-2xl rounded-tl-sm border border-navy-700 text-slate-300 shadow-sm leading-relaxed">
-                      You're currently in the top 12% of users for Enzyme Kinetics. Want a quick refresher on Hill coefficients before answering?
+                      You&apos;re currently in the top 12% of users for Enzyme Kinetics. Want a quick refresher on Hill coefficients before answering?
                     </div>
                     <div className="bg-neon-blue/10 p-3.5 rounded-2xl rounded-tr-sm border border-neon-blue/20 text-white ml-auto max-w-[85%] shadow-sm leading-relaxed">
                       Yes, briefly explain how positive cooperativity works here.
@@ -239,7 +319,7 @@ export default function LandingPage() {
                     <div className="bg-navy-800/80 p-3.5 rounded-2xl rounded-tl-sm border border-navy-700 text-slate-300 relative shadow-sm leading-relaxed">
                       <div className="w-2 h-2 rounded-full bg-neon-blue animate-ping absolute -left-1 -top-1" />
                       <div className="w-2 h-2 rounded-full bg-neon-blue absolute -left-1 -top-1" />
-                      Positive cooperativity means the binding of one substrate... 
+                      Positive cooperativity means the binding of one substrate...
                       <span className="inline-block w-1.5 h-3.5 ml-1.5 align-middle bg-neon-blue/80 animate-pulse" />
                     </div>
                   </div>
@@ -302,21 +382,16 @@ export default function LandingPage() {
           <div className="relative z-10">
             <h2 className="text-3xl font-display font-bold mb-4 tracking-tight">Ready to rank up?</h2>
             <p className="text-slate-400 mb-8 max-w-lg mx-auto">
-              Join the private beta and experience MCAT prep that feels like competitive gaming.
+              Join the private beta and be first to experience MCAT prep that feels like competitive gaming.
             </p>
-            <Link
-              href="/login"
-              className="inline-block bg-neon-blue text-navy-900 font-bold text-lg px-10 py-4 rounded-2xl hover:shadow-[0_0_40px_rgba(0,216,232,0.5)] transition-all duration-300 hover:-translate-y-1"
-            >
-              Get Started — It&apos;s Free
-            </Link>
+            <WaitlistForm id="cta-waitlist" variant="cta" />
           </div>
         </div>
       </section>
 
       {/* ── Footer ── */}
       <footer className="border-t border-navy-800 py-8 px-8 text-center text-slate-600 text-sm">
-        <p>&copy; {new Date().getFullYear()} Spike Prep. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} SpikePrep. All rights reserved.</p>
       </footer>
     </div>
   );

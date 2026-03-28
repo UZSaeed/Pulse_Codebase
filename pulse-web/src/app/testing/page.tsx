@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useState } from 'react';
 import Link from 'next/link';
 
-export default function LoginPage() {
+export default function TestingLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,13 +34,13 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-10">
-          <Link href="/landing" className="inline-flex items-center gap-2 font-orbitron mb-6">
+          <Link href="/" className="inline-flex items-center gap-2 font-orbitron mb-6">
             <img src="/pulse_transparent.png" alt="Spike Prep" className="w-12 h-12 object-contain drop-shadow-[0_0_12px_rgba(0,216,232,0.5)]" />
             <span className="text-3xl font-black tracking-tight text-white">Spike</span>
             <span className="text-3xl font-black tracking-tight text-neon-blue drop-shadow-[0_0_12px_rgba(0,216,232,0.8)]">Prep</span>
           </Link>
-          <h1 className="text-2xl font-display font-bold text-white mb-2">Welcome back</h1>
-          <p className="text-slate-400 text-sm">Sign in to continue your MCAT journey</p>
+          <h1 className="text-2xl font-display font-bold text-white mb-2">Internal Testing</h1>
+          <p className="text-slate-400 text-sm">This page is for developer testing only.</p>
         </div>
 
         {/* Login Card */}
@@ -78,7 +78,7 @@ export default function LoginPage() {
 
         {/* Back link */}
         <div className="text-center mt-6">
-          <Link href="/landing" className="text-sm text-slate-500 hover:text-neon-blue transition-colors">
+          <Link href="/" className="text-sm text-slate-500 hover:text-neon-blue transition-colors">
             ← Back to home
           </Link>
         </div>

@@ -47,5 +47,5 @@ export async function GET(request: Request) {
   }
 
   // Auth code exchange failed — redirect to login with error
-  return NextResponse.redirect(`${origin}/login?error=auth_failed`);
+  return NextResponse.redirect(`${origin}/landing?error=auth_failed`);
 }
