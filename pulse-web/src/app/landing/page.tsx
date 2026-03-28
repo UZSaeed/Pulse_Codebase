@@ -245,39 +245,39 @@ export default function LandingPage() {
             {/* Interface body */}
             <div className="flex flex-col md:flex-row min-h-[460px]">
               {/* Left Panel: Question */}
-              <div className="flex-1 p-6 md:p-10 flex flex-col items-start text-left">
-                <div className="flex items-center justify-between w-full mb-8">
-                  <span className="text-xs font-bold uppercase tracking-widest text-neon-blue bg-neon-blue/10 px-3 py-1.5 rounded-full border border-neon-blue/20">Biology &amp; Biochem</span>
-                  <div className="flex items-center gap-2 text-sm text-slate-400 font-bold bg-navy-800/50 px-3 py-1.5 rounded-full border border-navy-700">
-                    <span className="text-amber-400">🔥 12 day streak</span>
+              <div className="flex-1 p-4 sm:p-6 md:p-10 flex flex-col items-start text-left">
+                <div className="flex items-center justify-between w-full mb-6 sm:mb-8">
+                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-neon-blue bg-neon-blue/10 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-neon-blue/20">Biology &amp; Biochem</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-slate-400 font-bold bg-navy-800/50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-navy-700">
+                    <span className="text-amber-400">🔥 12 day<span className="hidden sm:inline"> streak</span></span>
                   </div>
                 </div>
 
-                <h3 className="text-2xl font-bold text-white mb-4">Question 14 of 59</h3>
-                <p className="text-slate-300 mb-8 leading-relaxed text-lg text-left">
+                <h3 className="text-xl sm:text-2xl font-bold text-white mb-2 sm:mb-4">Question 14 of 59</h3>
+                <p className="text-slate-300 mb-6 sm:mb-8 leading-relaxed text-sm lg:text-lg text-left">
                   Which of the following would most likely diminish the effect of an enzyme that exhibits cooperative binding?
                 </p>
 
                 {/* Options */}
-                <div className="space-y-3 mb-8 w-full">
+                <div className="space-y-2.5 sm:space-y-3 mb-6 sm:mb-8 w-full">
                   {["Adding a competitive inhibitor", "Introducing an allosteric activator", "A mutation that decreases subunit affinity", "Decreasing the temperature of the system"].map((opt, i) => (
-                    <div key={i} className={`p-4 rounded-xl border ${i === 2 ? 'border-neon-blue bg-neon-blue/5' : 'border-navy-700 bg-navy-800/30'} flex items-center gap-4`}>
-                      <div className={`w-5 h-5 rounded-full border flex flex-shrink-0 items-center justify-center ${i === 2 ? 'border-neon-blue bg-neon-blue/20' : 'border-slate-600'}`}>
-                        {i === 2 && <span className="w-2.5 h-2.5 rounded-full bg-neon-blue" />}
+                    <div key={i} className={`p-3 sm:p-4 rounded-xl border ${i === 2 ? 'border-neon-blue bg-neon-blue/5' : 'border-navy-700 bg-navy-800/30'} flex items-center gap-3 sm:gap-4`}>
+                      <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border flex flex-shrink-0 items-center justify-center ${i === 2 ? 'border-neon-blue bg-neon-blue/20' : 'border-slate-600'}`}>
+                        {i === 2 && <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-neon-blue" />}
                       </div>
-                      <span className={i === 2 ? 'text-white font-medium' : 'text-slate-400'}>{opt}</span>
+                      <span className={`${i === 2 ? 'text-white font-medium' : 'text-slate-400'} text-sm sm:text-base`}>{opt}</span>
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-auto pt-6 flex justify-between items-center w-full border-t border-navy-800">
-                  <div className="px-6 py-2.5 rounded-xl text-slate-500 font-medium border border-navy-700 bg-navy-800/30">Skip Question</div>
-                  <div className="px-8 py-2.5 rounded-xl bg-neon-blue text-navy-900 font-bold">Submit Answer</div>
+                <div className="mt-auto pt-4 sm:pt-6 flex justify-between items-center w-full border-t border-navy-800 text-sm sm:text-base">
+                  <div className="px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-slate-500 font-medium border border-navy-700 bg-navy-800/30">Skip<span className="hidden sm:inline"> Question</span></div>
+                  <div className="px-5 sm:px-8 py-2 sm:py-2.5 rounded-xl bg-neon-blue text-navy-900 font-bold">Submit<span className="hidden sm:inline"> Answer</span></div>
                 </div>
               </div>
 
-              {/* Right Panel: AI Tutor & Stats */}
-              <div className="w-full md:w-[360px] bg-navy-800/20 border-l border-navy-800 p-6 flex flex-col relative overflow-hidden text-left">
+              {/* Right Panel: AI Tutor & Stats (hidden on mobile) */}
+              <div className="hidden md:flex w-full md:w-[360px] bg-navy-800/20 border-l border-navy-800 p-6 flex-col relative overflow-hidden text-left">
                 <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/10 rounded-full blur-[60px] pointer-events-none" />
 
                 {/* Rank Stats */}
