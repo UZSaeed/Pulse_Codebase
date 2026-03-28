@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, Suspense } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -52,9 +52,19 @@ function getTodaySubject(): McatSubject {
   return MCAT_SUBJECTS[dayOfYear % 4];
 }
 
-// ─── Component ───────────────────────────────────────────────────
+// ─── Wrapper with Suspense ───────────────────────────────────────
 
 export default function PracticePage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center bg-navy-900"><div className="w-8 h-8 border-2 border-neon-blue border-t-transparent rounded-full animate-spin" /></div>}>
+      <PracticePageInner />
+    </Suspense>
+  );
+}
+
+// ─── Component ───────────────────────────────────────────────────
+
+function PracticePageInner() {
   const searchParams = useSearchParams();
   const urlTaskId = searchParams.get('taskId');
   
