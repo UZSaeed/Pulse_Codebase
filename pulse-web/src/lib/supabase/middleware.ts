@@ -25,6 +25,15 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
+  // If a Supabase auth code landed on the wrong route, forward it to /auth/callback
+  const authCode = request.nextUrl.searchParams.get('code');
+  if (authCode && !request.nextUrl.pathname.startsWith('/auth/callback')) {
+    const callbackUrl = request.nextUrl.clone();
+    callbackUrl.pathname = '/auth/callback';
+    // code param is already in searchParams via the clone
+    return NextResponse.redirect(callbackUrl);
+  }
+
   // Refresh session
   const {
     data: { user },
