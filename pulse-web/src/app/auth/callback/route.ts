@@ -1,9 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
-import { NextResponse } from 'next/server';
-import { redirect } from 'next/navigation';
+import { NextResponse, NextRequest } from 'next/server';
 
-export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get('code');
   const next = searchParams.get('next') ?? '/dashboard';
 
@@ -35,23 +34,38 @@ export async function GET(request: Request) {
           console.error('Failed to sync user to database:', e);
         }
       }
-
-      const forwardedHost = request.headers.get('x-forwarded-host');
       const isLocalEnv = process.env.NODE_ENV === 'development';
+      const forwardedHost = request.headers.get('x-forwarded-host');
 
-      if (isLocalEnv) {
-        return redirect(`${origin}${next}`);
-      } else if (forwardedHost) {
-        return redirect(`https://${forwardedHost}${next}`);
-      } else {
-        return redirect(`${origin}${next}`);
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = next;
+      redirectUrl.search = '';
+
+      if (!isLocalEnv && forwardedHost) {
+        redirectUrl.host = forwardedHost;
+        redirectUrl.port = '';
+        redirectUrl.protocol = 'https:';
       }
+
+      return NextResponse.redirect(redirectUrl);
     } else {
       errorMsg = error.message;
       console.error("Auth exchange error:", error);
     }
   }
 
-  // Auth code exchange failed — redirect to login with error
-  return redirect(`${origin}/landing?error=${encodeURIComponent(errorMsg)}`);
+  // Auth code exchange failed — redirect to landing with error
+  const errorUrl = request.nextUrl.clone();
+  errorUrl.pathname = '/landing';
+  errorUrl.searchParams.set('error', errorMsg);
+  
+  const isLocalEnv = process.env.NODE_ENV === 'development';
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  if (!isLocalEnv && forwardedHost) {
+    errorUrl.host = forwardedHost;
+    errorUrl.port = '';
+    errorUrl.protocol = 'https:';
+  }
+
+  return NextResponse.redirect(errorUrl);
 }
