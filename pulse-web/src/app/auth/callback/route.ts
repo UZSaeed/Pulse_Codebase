@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse, NextRequest } from 'next/server';
+import { redirect } from 'next/navigation';
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/dashboard';
+  const code = request.nextUrl.searchParams.get('code');
+  const next = request.nextUrl.searchParams.get('next') ?? '/dashboard';
+  const origin = request.nextUrl.origin;
 
   let errorMsg = 'auth_failed';
 
@@ -18,7 +19,6 @@ export async function GET(request: NextRequest) {
       
       if (user) {
         // Upsert user into our Prisma User table
-        // We do this via a simple fetch to our own API to keep Prisma server-only
         try {
           await fetch(`${origin}/api/user/sync`, {
             method: 'POST',
@@ -34,20 +34,17 @@ export async function GET(request: NextRequest) {
           console.error('Failed to sync user to database:', e);
         }
       }
-      const isLocalEnv = process.env.NODE_ENV === 'development';
+
       const forwardedHost = request.headers.get('x-forwarded-host');
+      const isLocalEnv = process.env.NODE_ENV === 'development';
 
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = next;
-      redirectUrl.search = '';
-
-      if (!isLocalEnv && forwardedHost) {
-        redirectUrl.host = forwardedHost;
-        redirectUrl.port = '';
-        redirectUrl.protocol = 'https:';
+      if (isLocalEnv) {
+        redirect(`${origin}${next}`);
+      } else if (forwardedHost) {
+        redirect(`https://${forwardedHost}${next}`);
+      } else {
+        redirect(`${origin}${next}`);
       }
-
-      return NextResponse.redirect(redirectUrl);
     } else {
       errorMsg = error.message;
       console.error("Auth exchange error:", error);
@@ -55,17 +52,5 @@ export async function GET(request: NextRequest) {
   }
 
   // Auth code exchange failed — redirect to landing with error
-  const errorUrl = request.nextUrl.clone();
-  errorUrl.pathname = '/landing';
-  errorUrl.searchParams.set('error', errorMsg);
-  
-  const isLocalEnv = process.env.NODE_ENV === 'development';
-  const forwardedHost = request.headers.get('x-forwarded-host');
-  if (!isLocalEnv && forwardedHost) {
-    errorUrl.host = forwardedHost;
-    errorUrl.port = '';
-    errorUrl.protocol = 'https:';
-  }
-
-  return NextResponse.redirect(errorUrl);
+  redirect(`${origin}/landing?error=${encodeURIComponent(errorMsg)}`);
 }
