@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Flag } from 'lucide-react';
 import ReactSlider from 'react-slider';
-import { getUserPreferences, submitOnboarding } from '../actions';
+import { getUserPreferences, saveSettings } from '../actions';
 
 const renderHorizontalTrack = (props: any, state: any) => {
   const bgClass =
@@ -30,6 +30,7 @@ const verticalTrackRenderers: Record<string, any> = {
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   const [testDate, setTestDate] = useState<string>('');
   const [thumb1, setThumb1] = useState(30);
@@ -77,8 +78,9 @@ export default function SettingsPage() {
   const handleSave = async () => {
     if (!testDate) return;
     setSaving(true);
+    setSaveStatus('idle');
     try {
-      await submitOnboarding({
+      await saveSettings({
         testDate: new Date(testDate),
         rampUpPercentage: Math.round(rampUpPct),
         grindPercentage: Math.round(grindPct),
@@ -87,10 +89,12 @@ export default function SettingsPage() {
         grindQuestionsPerDay: Math.round(qsOpts.grind),
         lastStretchQuestionsPerDay: Math.round(qsOpts.lastStretch),
       });
-      alert('Settings saved!');
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus('idle'), 3000);
     } catch (e) {
       console.error(e);
-      alert('Failed to save settings');
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 4000);
     } finally {
       setSaving(false);
     }
@@ -183,7 +187,17 @@ export default function SettingsPage() {
               </div>
             </Card>
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-end gap-4">
+              {saveStatus === 'success' && (
+                <span className="text-emerald-400 text-sm font-bold animate-fade-in flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" /> Settings saved successfully!
+                </span>
+              )}
+              {saveStatus === 'error' && (
+                <span className="text-red-400 text-sm font-bold animate-fade-in flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-red-400" /> Failed to save — please try again.
+                </span>
+              )}
               <Button variant="primary" neon className="w-48 font-bold text-lg" onClick={handleSave} disabled={saving || !testDate}>
                 {saving ? 'Saving...' : 'Save Settings'}
               </Button>

@@ -46,6 +46,46 @@ export async function submitOnboarding(data: {
   redirect('/dashboard');
 }
 
+export async function saveSettings(data: {
+  testDate: Date;
+  rampUpPercentage: number;
+  grindPercentage: number;
+  lastStretchPercentage: number;
+  rampUpQuestionsPerDay: number;
+  grindQuestionsPerDay: number;
+  lastStretchQuestionsPerDay: number;
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('Not logged in');
+  }
+
+  const { testDate, ...prefs } = data;
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      preferences: {
+        upsert: {
+          create: {
+            testDate,
+            ...prefs,
+          },
+          update: {
+            testDate,
+            ...prefs,
+          },
+        },
+      },
+    },
+  });
+
+  revalidatePath('/settings');
+  return { success: true };
+}
+
 export async function getUserPreferences() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

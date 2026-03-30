@@ -70,7 +70,7 @@ function PracticePageInner() {
   
   const todaySubject = getTodaySubject();
   const { fireConfetti } = useConfetti();
-  const { profile, togglePlannerTask } = useUserProfile();
+  const { profile, togglePlannerTask, submitSession, persistSession } = useUserProfile();
 
   const [activeTaskId, setActiveTaskId] = useState<string | null>(urlTaskId);
 
@@ -281,6 +281,7 @@ function PracticePageInner() {
     setSessionResults([]);
     setProgressWidth(0);
     setChatOpen(false);
+    setLastProcessedResult(null);
   }, []);
 
   const sendChatMessage = useCallback(async () => {
@@ -311,7 +312,26 @@ function PracticePageInner() {
 
   // ─── Helper: compute ELO changes ─────────────────────────
 
+  // Store the last processed session results for display
+  const [lastProcessedResult, setLastProcessedResult] = useState<import('@/lib/userProfile').ProcessedSessionResult | null>(null);
+
   const computeEloChanges = (results: { question: DummyQuestion; userAnswer?: string; correct: boolean }[]) => {
+    // Use last processed result if available for accurate data
+    if (lastProcessedResult) {
+      const topicEloChanges: Record<string, { topicName: string; subject: McatSubject; gained: number; lost: number; net: number }> = {};
+      for (const [topic, change] of Object.entries(lastProcessedResult.eloChanges)) {
+        topicEloChanges[topic] = {
+          topicName: change.topic,
+          subject: change.subject,
+          gained: Math.max(0, change.eloDelta),
+          lost: Math.abs(Math.min(0, change.eloDelta)),
+          net: change.eloDelta,
+        };
+      }
+      const netTotal = lastProcessedResult.totalEloDelta;
+      return { topicEloChanges, netTotal };
+    }
+    // Fallback: estimate from results
     const topicEloChanges: Record<string, { topicName: string; subject: McatSubject; gained: number; lost: number; net: number }> = {};
     results.forEach(({ question, correct }) => {
       if (!topicEloChanges[question.topic]) {
@@ -330,6 +350,18 @@ function PracticePageInner() {
 
   const saveToHistory = useCallback(() => {
     if (!sessionSubject || sessionResults.length === 0) return;
+
+    // Process ELO/XP through the real engine
+    const sessionInputs: import('@/lib/userProfile').SessionResultInput[] = sessionResults.map(r => ({
+      subject: r.question.subject,
+      questionDifficulty: r.question.difficulty,
+      isCorrect: r.correct,
+      topic: r.question.topic,
+    }));
+
+    const processed = submitSession(sessionInputs);
+    setLastProcessedResult(processed);
+
     const { netTotal } = computeEloChanges(sessionResults);
     setPracticeHistory(prev => [{
       id: Date.now(),
@@ -337,9 +369,40 @@ function PracticePageInner() {
       questions: sessionQuestions,
       results: sessionResults,
       correctCount,
-      netElo: netTotal,
+      netElo: processed.totalEloDelta,
       timestamp: new Date(),
     }, ...prev]);
+
+    // Persist to database
+    const performances = sessionResults.map(r => ({
+      questionId: r.question.id,
+      isCorrect: r.correct,
+      eloChange: 0, // individual change tracked in processSessionResults
+    }));
+    persistSession(processed, sessionSubject, performances);
+
+    // Show rank-up overlay if rank changed
+    if (processed.rankChanged || processed.leveledUp) {
+      setLevelUpRank(processed.newRank);
+      setLevelUpOldRank(processed.oldRank);
+      setLevelUpRankChanged(processed.rankChanged);
+      setLevelUpXp(processed.xpGained);
+      setShowLevelUp(true);
+    }
+
+    // Also check per-subject rank changes
+    for (const s of ['chem_phys', 'cars', 'bio_biochem', 'psych_soc'] as const) {
+      const oldRank = profile.subjects[s].rank;
+      const newRank = processed.newProfile.subjects[s].rank;
+      if (oldRank.displayName !== newRank.displayName && s === sessionSubject) {
+        setLevelUpRank(newRank);
+        setLevelUpOldRank(oldRank);
+        setLevelUpRankChanged(true);
+        setLevelUpXp(processed.xpGained);
+        setShowLevelUp(true);
+        break;
+      }
+    }
 
     // Check off the planner block if an active ID is linked
     if (activeTaskId) {
@@ -349,7 +412,7 @@ function PracticePageInner() {
       }
       setActiveTaskId(null);
     }
-  }, [sessionSubject, sessionQuestions, sessionResults, correctCount, activeTaskId, profile.plannerTasks, togglePlannerTask]);
+  }, [sessionSubject, sessionQuestions, sessionResults, correctCount, activeTaskId, profile, togglePlannerTask, submitSession, persistSession]);
 
   // ─── Render: Review Questions Mode ────────────────────────
 
@@ -956,7 +1019,7 @@ function PracticePageInner() {
               <Button
                 variant="primary"
                 neon
-                className="w-full md:w-auto px-8 py-3 bg-neon-blue text-navy-900 hover:bg-neon-blue/90 font-bold uppercase tracking-wider shadow-xl group-hover:shadow-[0_0_25px_rgba(0,216,232,0.6)] transition-all pointer-events-none"
+                className="w-full md:w-auto px-8 py-3 bg-neon-blue text-navy-900 hover:bg-neon-blue/90 font-bold uppercase tracking-wider shadow-xl group-hover:shadow-[0_0_25px_rgba(0,216,232,0.6)] transition-all"
               >
                 Start Block →
               </Button>
@@ -999,7 +1062,7 @@ function PracticePageInner() {
                   {subRank.eloToNextTier > 0 && (
                     <div className="mb-3">
                       <div className="w-full bg-navy-900/80 rounded-full h-1.5 overflow-hidden border border-navy-700">
-                        <div className="bg-neon-blue h-full rounded-full transition-all duration-500 shadow-[0_0_6px_rgba(0,216,232,0.5)]" style={{ width: `${subRank.progressInTier * 100}%` }} />
+                        <div className="bg-neon-blue h-full rounded-full transition-all duration-[1500ms] ease-out shadow-[0_0_6px_rgba(0,216,232,0.5)]" style={{ width: `${subRank.progressInTier * 100}%` }} />
                       </div>
                       <p className="text-[10px] text-slate-500 mt-1">{subRank.eloToNextTier} ELO to next tier</p>
                     </div>
@@ -1162,7 +1225,18 @@ function PracticePageInner() {
             </Card>
           </div>
         )}
+
+        {/* Rank-up / Level-up overlay */}
+        <LevelUpOverlay
+          show={showLevelUp}
+          newRank={levelUpRank}
+          oldRank={levelUpOldRank}
+          rankChanged={levelUpRankChanged}
+          xpGained={levelUpXp}
+          onDismiss={() => setShowLevelUp(false)}
+        />
       </main>
     </div>
   );
 }
+

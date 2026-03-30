@@ -1,10 +1,13 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { redirect } from 'next/navigation';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next') ?? '/dashboard';
+
+  let errorMsg = 'auth_failed';
 
   if (code) {
     const supabase = await createClient();
@@ -37,15 +40,18 @@ export async function GET(request: Request) {
       const isLocalEnv = process.env.NODE_ENV === 'development';
 
       if (isLocalEnv) {
-        return NextResponse.redirect(`${origin}${next}`);
+        return redirect(`${origin}${next}`);
       } else if (forwardedHost) {
-        return NextResponse.redirect(`https://${forwardedHost}${next}`);
+        return redirect(`https://${forwardedHost}${next}`);
       } else {
-        return NextResponse.redirect(`${origin}${next}`);
+        return redirect(`${origin}${next}`);
       }
+    } else {
+      errorMsg = error.message;
+      console.error("Auth exchange error:", error);
     }
   }
 
   // Auth code exchange failed — redirect to login with error
-  return NextResponse.redirect(`${origin}/landing?error=auth_failed`);
+  return redirect(`${origin}/landing?error=${encodeURIComponent(errorMsg)}`);
 }

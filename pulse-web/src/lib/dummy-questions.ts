@@ -383,7 +383,18 @@ export function getSessionQuestions(
   chapterId?: string,
   topics?: string[]
 ): DummyQuestion[] {
-  const pool = getDummyQuestions(subject, chapterId, topics);
+  let pool = getDummyQuestions(subject, chapterId, topics);
+  
+  // Fallback: If no questions match the specific topics, just use any questions from the subject
+  if (pool.length === 0 && topics && topics.length > 0) {
+    pool = getDummyQuestions(subject, chapterId, undefined);
+  }
+  
+  // Fallback 2: If STILL no questions match the specific chapter, just use any from the subject
+  if (pool.length === 0 && chapterId) {
+    pool = getDummyQuestions(subject, undefined, undefined);
+  }
+
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, Math.min(count, shuffled.length));
 }

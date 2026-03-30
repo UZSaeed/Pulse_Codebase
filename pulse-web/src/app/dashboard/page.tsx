@@ -17,9 +17,23 @@ const SUBJECT_CONFIG: Record<McatSubject, { icon: string; gradient: string }> = 
 };
 
 export default function Home() {
-  const { profile } = useUserProfile();
+  const { profile, loading } = useUserProfile();
   const overallRank = profile.overallRank;
   const colors = RANK_COLORS[overallRank.rank];
+
+  if (loading) {
+    return (
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar />
+        <main className="flex-1 overflow-y-auto bg-navy-900 p-8 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-10 h-10 border-2 border-neon-blue border-t-transparent rounded-full animate-spin" />
+            <p className="text-slate-400 text-sm font-medium">Loading your profile...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   // Radar chart data
   const radarData = MCAT_SUBJECTS.map((s) => ({
@@ -27,7 +41,7 @@ export default function Home() {
     label: SUBJECT_LABELS[s],
     icon: SUBJECT_CONFIG[s].icon,
     value: profile.subjects[s].elo,
-    max: 2200, // Chart scale max
+    max: 2000, // Chart scale max — lower ceiling pushes Diamond closer to the edge
   }));
 
   return (
@@ -102,7 +116,7 @@ export default function Home() {
           {/* Radar Polygon Chart */}
           <Card className="flex flex-col items-center justify-center p-6 bg-navy-800/80 backdrop-blur-sm">
             <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4 self-start">Section Strength</h3>
-            <RadarChart data={radarData} size={320} />
+            <RadarChart data={radarData} size={380} />
           </Card>
 
           {/* Subject Mastery Cards */}

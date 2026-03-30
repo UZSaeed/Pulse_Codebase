@@ -48,11 +48,11 @@ export async function updateSession(request: NextRequest) {
     if (user) {
       const url = request.nextUrl.clone();
       url.pathname = '/dashboard';
-      return NextResponse.redirect(url);
+      return NextResponse.redirect(url, { headers: supabaseResponse.headers });
     } else {
       const url = request.nextUrl.clone();
       url.pathname = '/landing';
-      return NextResponse.redirect(url);
+      return NextResponse.redirect(url, { headers: supabaseResponse.headers });
     }
   }
 
@@ -60,7 +60,7 @@ export async function updateSession(request: NextRequest) {
   if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = '/landing';
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(url, { headers: supabaseResponse.headers });
   }
 
   return supabaseResponse;
