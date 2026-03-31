@@ -75,6 +75,11 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
           updated.preferences = data.preferences;
         }
 
+        // Regenerate planner tasks based on current date & preferences
+        const { generateWeeklyPlan } = require('@/lib/planner');
+        const todayStr = new Date().toISOString().split('T')[0];
+        updated.plannerTasks = generateWeeklyPlan(updated, todayStr);
+
         return updated;
       });
     } catch (err) {

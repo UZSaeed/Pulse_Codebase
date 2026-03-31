@@ -60,6 +60,17 @@ model Question {
   explanation   String
   distractorExplanations String? // JSON string
   baseDifficulty Int     @default(1500)
+  
+  // Sourced Content Metadata
+  imageUrls      String?  // JSON array of figure URLs (or imagePrompt for legacy)
+  sourcePmcId    String?  // PMC ID for sourced papers
+  sourceTitle    String?  // Paper title
+  sourceAuthors  String?  // Paper authors
+  sourceLicense  String?  // OA license
+  requiresFigure Boolean  @default(false)
+  referencedFigure String? // e.g., "Figure 1"
+  generationType String   @default("hallucinated") // "sourced" | "discrete" | "hallucinated"
+  
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   

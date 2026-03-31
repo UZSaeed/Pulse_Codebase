@@ -13,22 +13,27 @@
  */
 
 import { McatSubject, SUBJECT_LABELS } from './elo';
+import { fetchSourcedContent } from './sourced-content-fetcher';
+import { generateMultimodalQuestions, type MultimodalQuestionSet, type MultimodalGenerateOptions } from './multimodal-generator';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export interface GeneratedQuestion {
-  passage?: string; // null for discrete questions
+  id?: string;
+  passage?: string | null; // null for discrete questions
   stem: string;
   choices: { label: string; text: string }[];
   correctAnswer: string; // 'A' | 'B' | 'C' | 'D'
   explanation: string;
-  distractorExplanations?: Record<string, string>;
-  imagePrompt?: string;
+  distractorExplanations: Record<string, string>;
+  imageUrls?: string[] | null;
+  sourcePmcId?: string | null;
   subject: McatSubject;
   topic: string;
   difficulty: number; // estimated ELO
+  chapterId?: string;
 }
 
 export type ModelTier = 'premium' | 'economy';
@@ -76,6 +81,15 @@ Rules:
 4. Include integrative reasoning that crosses sub-discipline boundaries when appropriate.
 5. Provide a detailed, step-by-step explanation for the correct answer, AND distinct explanations for why each distractor is wrong.
 6. If the passage or question would benefit from a scientific visual, chart, molecular structure, or graph, provide an extremely descriptive 'imagePrompt' that can be given to an image generation model (like DALL-E 3) to create it. If no visual is needed, set 'imagePrompt' to null.
+
+7. CRITICAL SCOPE ENFORCEMENT: The provided research paper WILL be highly advanced (e.g., graduate-level, specialized clinical medicine, advanced materials engineering). **YOU MUST STRIP AWAY THE COMPLEXITY**. Only use the paper as a backdrop. ALL questions MUST test ONLY foundational, 100-level undergraduate science concepts (e.g., Gen Chem: Stoichiometry, electron configurations, VSEPR; Biology: central dogma, basic cell structures; Physics: basic kinematics, rudimentary circuits). If the paper uses a complex transition-metal catalyst, ask a basic question about transition metal characteristics. **NEVER ask a question that requires prior knowledge of the advanced topic.**
+8. FORBIDDEN TOPICS: NEVER ask questions about band gaps, semiconductor physics, solid-state lattice constants, quantum computing, or engineering-specific measurements.
+9. MANDATORY PIVOTS: If you see a complex paper, you MUST pivot to one of these foundational concepts:
+   - Atomic Structure (valence electrons, subshell configuration, Zeff, atomic/ionic radius).
+   - Bonding (electronegativity differences, bond polarity, octet rule, hybridization).
+   - Periodic Trends (ionization energy, electron affinity).
+   - Stoichiometry (limiting reagents, percent yield).
+   - Laboratory Techniques (identifying controls, independent vs dependent variables).
 
 You MUST respond with valid JSON matching the schema provided.`;
 
@@ -218,6 +232,32 @@ export async function generateQuestion(
     ...parsed,
     subject,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Sourced Generation API call
+// ---------------------------------------------------------------------------
+
+/**
+ * Orchestrator to fetch real scientific papers from PMC
+ * and run them through the multimodal question generator.
+ */
+export async function generateSourcedQuestions(
+  apiKey: string,
+  opts: MultimodalGenerateOptions
+): Promise<MultimodalQuestionSet | null> {
+  const { subject, topic } = opts;
+  if (!topic) {
+    console.warn('[SourcedGen] Topic is required to search PMC');
+    return null;
+  }
+
+  const content = await fetchSourcedContent(subject, topic);
+  if (!content) {
+    return null;
+  }
+
+  return generateMultimodalQuestions(apiKey, content, opts);
 }
 
 // ---------------------------------------------------------------------------

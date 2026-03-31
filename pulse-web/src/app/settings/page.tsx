@@ -7,27 +7,40 @@ import { Button } from '@/components/ui/Button';
 import { Flag } from 'lucide-react';
 import ReactSlider from 'react-slider';
 import { getUserPreferences, saveSettings } from '../actions';
+import { useUserProfile } from '@/context/UserProfileContext';
 
 const renderHorizontalTrack = (props: any, state: any) => {
+  const { key, ...trackProps } = props;
   const bgClass =
     state.index === 0 ? 'bg-blue-500' :
     state.index === 1 ? 'bg-purple-500' : 'bg-red-500';
-  return <div {...props} className={`${props.className || ''} ${bgClass}`} />;
+  return <div key={key} {...trackProps} className={`${props.className || ''} ${bgClass}`} />;
 };
 
 const renderHorizontalThumb = (props: any, state: any) => {
+  const { key, ...thumbProps } = props;
   const borderColor =
     state.index === 0 ? 'border-blue-500' : 'border-purple-500';
-  return <div {...props} className={`${props.className || ''} ${borderColor}`} />;
+  return <div key={key} {...thumbProps} className={`${props.className || ''} ${borderColor}`} />;
 };
 
 const verticalTrackRenderers: Record<string, any> = {
-  rampUp: (props: any, state: any) => <div {...props} className={`${props.className || ''} ${state.index === 0 ? 'bg-blue-500' : 'bg-navy-900'}`} />,
-  grind: (props: any, state: any) => <div {...props} className={`${props.className || ''} ${state.index === 0 ? 'bg-purple-500' : 'bg-navy-900'}`} />,
-  lastStretch: (props: any, state: any) => <div {...props} className={`${props.className || ''} ${state.index === 0 ? 'bg-red-500' : 'bg-navy-900'}`} />
+  rampUp: (props: any, state: any) => {
+    const { key, ...trackProps } = props;
+    return <div key={key} {...trackProps} className={`${props.className || ''} ${state.index === 0 ? 'bg-blue-500' : 'bg-navy-900'}`} />;
+  },
+  grind: (props: any, state: any) => {
+    const { key, ...trackProps } = props;
+    return <div key={key} {...trackProps} className={`${props.className || ''} ${state.index === 0 ? 'bg-purple-500' : 'bg-navy-900'}`} />;
+  },
+  lastStretch: (props: any, state: any) => {
+    const { key, ...trackProps } = props;
+    return <div key={key} {...trackProps} className={`${props.className || ''} ${state.index === 0 ? 'bg-red-500' : 'bg-navy-900'}`} />;
+  }
 };
 
 export default function SettingsPage() {
+  const { refreshProfile } = useUserProfile();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -89,6 +102,7 @@ export default function SettingsPage() {
         grindQuestionsPerDay: Math.round(qsOpts.grind),
         lastStretchQuestionsPerDay: Math.round(qsOpts.lastStretch),
       });
+      await refreshProfile();
       setSaveStatus('success');
       setTimeout(() => setSaveStatus('idle'), 3000);
     } catch (e) {

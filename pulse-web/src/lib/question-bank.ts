@@ -1,5 +1,5 @@
 import { prisma } from './prisma';
-import { generateQuestion, type GeneratedQuestion } from './ai';
+import { generateQuestion, generateSourcedQuestions, type GeneratedQuestion } from './ai';
 import type { McatSubject } from './elo';
 
 const TOPIC_QUESTION_LIMIT = 100;
@@ -105,4 +105,64 @@ export async function checkAndExpandQuestionBank(subject: McatSubject, topic: st
   });
 
   return { success: true, generated: 1 };
+}
+
+export async function checkAndExpandWithSourcedContent(subject: McatSubject, topic: string) {
+  const count = await prisma.question.count({
+    where: { topic }
+  });
+
+  if (count >= TOPIC_QUESTION_LIMIT) {
+    return { success: true, generated: 0, reason: 'limit_reached' };
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY is not configured.');
+  }
+
+  // Try sourced generation first
+  try {
+    const sourcedSet = await generateSourcedQuestions(apiKey, {
+      subject,
+      topic,
+      targetDifficulty: 1500, // Can randomize later
+      questionCount: 4 // Generate a batch
+    });
+
+    if (sourcedSet && sourcedSet.questions_array.length > 0) {
+      // Create passage-based DB questions for each generated question
+      for (const q of sourcedSet.questions_array) {
+        await prisma.question.create({
+          data: {
+            subject: sourcedSet.subject_metadata.subject,
+            topic: q.topic, // use the question's specific topic or default
+            passage: sourcedSet.passage_text,
+            text: q.stem,
+            choices: JSON.stringify(q.choices),
+            correctAnswer: q.correctAnswer,
+            explanation: q.explanation,
+            distractorExplanations: q.distractorExplanations ? JSON.stringify(q.distractorExplanations) : null,
+            baseDifficulty: q.difficulty,
+            
+            // Sourced Metadata
+            imageUrls: sourcedSet.image_urls.length > 0 ? JSON.stringify(sourcedSet.image_urls) : null,
+            sourcePmcId: sourcedSet.source_metadata.pmcId,
+            sourceTitle: sourcedSet.source_metadata.title,
+            sourceAuthors: sourcedSet.source_metadata.authors,
+            sourceLicense: sourcedSet.source_metadata.license,
+            requiresFigure: q.requiresFigure,
+            referencedFigure: q.referencedFigure,
+            generationType: 'sourced'
+          }
+        });
+      }
+      return { success: true, generated: sourcedSet.questions_array.length, type: 'sourced' };
+    }
+  } catch (err) {
+    console.warn('[BankExpand] Sourced generation failed, falling back inline:', err);
+  }
+
+  console.log('[BankExpand] Falling back to hallucinated generation for', topic);
+  return checkAndExpandQuestionBank(subject, topic);
 }

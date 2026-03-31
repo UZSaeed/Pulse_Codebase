@@ -10,7 +10,7 @@ import CountUp from 'react-countup';
 import { useSearchParams } from 'next/navigation';
 import { MCAT_CHAPTERS } from '@/lib/chapters';
 import { SUBJECT_LABELS, type McatSubject, MCAT_SUBJECTS, RANK_COLORS } from '@/lib/elo';
-import { getSessionQuestions, type DummyQuestion } from '@/lib/dummy-questions';
+import { type GeneratedQuestion } from '@/lib/ai';
 import {
   Loader2,
   Send,
@@ -84,7 +84,7 @@ function PracticePageInner() {
   // Session state
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionSubject, setSessionSubject] = useState<McatSubject | null>(null);
-  const [sessionQuestions, setSessionQuestions] = useState<DummyQuestion[]>([]);
+  const [sessionQuestions, setSessionQuestions] = useState<GeneratedQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
   // Manual mode selection
@@ -93,12 +93,14 @@ function PracticePageInner() {
   const [manualChapter, setManualChapter] = useState<string | undefined>(undefined);
   const [manualCount, setManualCount] = useState(5);
   const [manualTopics, setManualTopics] = useState<string[]>([]);
+  const [fetchingSession, setFetchingSession] = useState(false);
+  const [fetchingError, setFetchingError] = useState<string | null>(null);
 
   const [draftAnswer, setDraftAnswer] = useState<string | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
-  const [sessionResults, setSessionResults] = useState<{ question: DummyQuestion; userAnswer?: string; correct: boolean }[]>([]);
+  const [sessionResults, setSessionResults] = useState<{ question: GeneratedQuestion; userAnswer?: string; correct: boolean }[]>([]);
 
   // Review mode
   const [reviewMode, setReviewMode] = useState(false);
@@ -112,13 +114,28 @@ function PracticePageInner() {
   type PracticeSession = {
     id: number;
     subject: McatSubject;
-    questions: DummyQuestion[];
-    results: { question: DummyQuestion; userAnswer?: string; correct: boolean }[];
+    questions: GeneratedQuestion[];
+    results: { question: GeneratedQuestion; userAnswer?: string; correct: boolean }[];
     correctCount: number;
     netElo: number;
     timestamp: Date;
   };
   const [practiceHistory, setPracticeHistory] = useState<PracticeSession[]>([]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('pulse_practice_history');
+      if (saved) {
+        const parsed = JSON.parse(saved).map((s: any) => ({
+          ...s,
+          timestamp: new Date(s.timestamp)
+        }));
+        setPracticeHistory(parsed);
+      }
+    } catch (e) {
+      console.error('Failed to load practice history', e);
+    }
+  }, []);
 
   // View past session report
   const [viewingPastSession, setViewingPastSession] = useState<PracticeSession | null>(null);
@@ -215,22 +232,117 @@ function PracticePageInner() {
 
   // ─── Handlers ──────────────────────────────────────────────
 
-  const startSession = useCallback((subject: McatSubject, count: number, chapterId?: string, topics?: string[]) => {
-    const questions = getSessionQuestions(subject, count, chapterId, topics);
-    if (questions.length === 0) return;
-    setSessionSubject(subject);
-    setSessionQuestions(questions);
-    setCurrentIndex(0);
-    setDraftAnswer(null);
-    setSelectedAnswer(null);
-    setShowExplanation(false);
-    setCorrectCount(0);
+  const fetchRealQuestion = async (
+    subject: McatSubject, 
+    type: 'sourced' | 'discrete' | 'auto',
+    topic?: string,
+    chapterId?: string,
+    count?: number
+  ) => {
+    const res = await fetch('/api/questions/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject,
+        topic,
+        chapterId,
+        generationType: type,
+        count,
+      }),
+    });
+    if (!res.ok) throw new Error('API Error');
+    return await res.json();
+  };
+
+  const startSession = useCallback(async (subject: McatSubject, count: number, chapterId?: string, topics?: string[]) => {
+    setFetchingSession(true);
+    setFetchingError(null);
     setSessionResults([]);
-    setChatOpen(false);
-    setChatMessages([]);
-    setProgressWidth(0);
-    setSessionActive(true);
-    setShowManualModal(false);
+    setCurrentIndex(0);
+    setSessionActive(true); // show loader immediately
+    setSessionSubject(subject);
+    
+    try {
+      // Calculate target mix (80% passage-based, 20% discrete)
+      const targetDiscrete = Math.max(1, Math.round(count * 0.20));
+      const targetPassage = count - targetDiscrete;
+
+      const discretePool: any[] = [];
+      const passagePool: any[] = [];
+
+      // Concurrent fetch for efficiency
+      const fetchJobs: Promise<void>[] = [];
+
+      // 1. Fetch discrete questions
+      if (targetDiscrete > 0) {
+        fetchJobs.push((async () => {
+          try {
+            const res = await fetchRealQuestion(subject, 'discrete', topics?.[0], chapterId, targetDiscrete);
+            if (res.questions && Array.isArray(res.questions)) {
+              discretePool.push(...res.questions.map((q: any) => ({ ...q, id: q.id })));
+            } else if (res.question) {
+              discretePool.push({ ...res.question, id: res.question.id });
+            }
+          } catch (e) {
+            console.error('[StartSession] Discrete fetch failed', e);
+          }
+        })());
+      }
+
+      // 2. Fetch passage-based questions
+      let attempts = 0;
+      let totalPassageAttemptsAvailable = Math.max(5, Math.ceil(targetPassage / 4) + 2);
+      while (passagePool.length < targetPassage && attempts < totalPassageAttemptsAvailable) {
+        attempts++;
+        const needed = targetPassage - passagePool.length;
+        const chunkSize = Math.min(6, needed); // Don't ask LLM for more than 6 passage questions at a time
+        
+        try {
+          const res = await fetchRealQuestion(subject, 'sourced', topics?.[0], chapterId, chunkSize);
+          
+          if (res.questions && Array.isArray(res.questions)) {
+            res.questions.forEach((q: any) => {
+              const formatted = { ...q, id: q.id };
+              if (formatted.passage) passagePool.push(formatted);
+              else discretePool.push(formatted);
+            });
+          } else if (res.question) {
+            const formatted = { ...res.question, id: res.question.id };
+            if (formatted.passage) passagePool.push(formatted);
+            else discretePool.push(formatted);
+          }
+        } catch (e) {
+          console.error('[StartSession] Sourced fetch failed', e);
+        }
+      }
+
+      await Promise.all(fetchJobs);
+
+      // Combine: passage questions first, discrete last (MCAT style)
+      const combined = [...passagePool.slice(0, targetPassage), ...discretePool.slice(0, targetDiscrete)];
+
+      if (combined.length > 0) {
+        setSessionQuestions(combined.slice(0, count));
+        setDraftAnswer(null);
+        setSelectedAnswer(null);
+        setShowExplanation(false);
+        setCorrectCount(0);
+        setChatOpen(false);
+        setChatMessages([]);
+        setProgressWidth(0);
+        setShowManualModal(false);
+        setFetchingSession(false);
+        return; // Success — we have sourced questions
+      }
+
+      // If we got zero questions from the API, throw to show error
+      throw new Error('No questions returned from API');
+    } catch (err) {
+      console.warn('[StartSession] API fetch failed:', err);
+      setFetchingError('Failed to generate questions. Please check that your OPENAI_API_KEY is set in .env.local, then restart the dev server.');
+    } finally {
+      setFetchingSession(false);
+    }
   }, []);
 
   const submitAnswer = useCallback((label: string | null = null) => {
@@ -315,7 +427,7 @@ function PracticePageInner() {
   // Store the last processed session results for display
   const [lastProcessedResult, setLastProcessedResult] = useState<import('@/lib/userProfile').ProcessedSessionResult | null>(null);
 
-  const computeEloChanges = (results: { question: DummyQuestion; userAnswer?: string; correct: boolean }[]) => {
+  const computeEloChanges = (results: { question: GeneratedQuestion; userAnswer?: string; correct: boolean }[]) => {
     // Use last processed result if available for accurate data
     if (lastProcessedResult) {
       const topicEloChanges: Record<string, { topicName: string; subject: McatSubject; gained: number; lost: number; net: number }> = {};
@@ -363,23 +475,36 @@ function PracticePageInner() {
     setLastProcessedResult(processed);
 
     const { netTotal } = computeEloChanges(sessionResults);
-    setPracticeHistory(prev => [{
-      id: Date.now(),
-      subject: sessionSubject,
-      questions: sessionQuestions,
-      results: sessionResults,
-      correctCount,
-      netElo: processed.totalEloDelta,
-      timestamp: new Date(),
-    }, ...prev]);
+    
+    setPracticeHistory(prev => {
+      const updated = [{
+        id: Date.now(),
+        subject: sessionSubject,
+        questions: sessionQuestions,
+        results: sessionResults,
+        correctCount,
+        netElo: processed.totalEloDelta,
+        timestamp: new Date(),
+      }, ...prev];
+      
+      try {
+        localStorage.setItem('pulse_practice_history', JSON.stringify(updated.slice(0, 20))); // Keep last 20
+      } catch (e) {
+        console.error('Failed to save history to local storage', e);
+      }
+      return updated;
+    });
 
     // Persist to database
-    const performances = sessionResults.map(r => ({
-      questionId: r.question.id,
-      isCorrect: r.correct,
-      eloChange: 0, // individual change tracked in processSessionResults
-    }));
-    persistSession(processed, sessionSubject, performances);
+    try {
+      persistSession(processed, sessionSubject, sessionResults.map(r => ({
+        questionId: r.question.id || 'unknown',
+        isCorrect: r.correct,
+        eloChange: processed.eloChanges[r.question.topic]?.eloDelta ?? 0,
+      })));
+    } catch (e) {
+      console.error('[FinishSession] Failed to persist:', e);
+    }
 
     // Show rank-up overlay if rank changed
     if (processed.rankChanged || processed.leveledUp) {
@@ -416,7 +541,7 @@ function PracticePageInner() {
 
   // ─── Render: Review Questions Mode ────────────────────────
 
-  const renderReviewMode = (results: { question: DummyQuestion; userAnswer?: string; correct: boolean }[], onBack: () => void) => {
+  const renderReviewMode = (results: { question: GeneratedQuestion; userAnswer?: string; correct: boolean }[], onBack: () => void) => {
     const item = results[reviewIndex];
     if (!item) return null;
     const { question, userAnswer, correct } = item;
@@ -511,6 +636,22 @@ function PracticePageInner() {
                     </div>
                     <p className="text-slate-300 leading-relaxed text-[15px]">{question.explanation}</p>
                   </div>
+
+                  {question.imageUrls && question.imageUrls.length > 0 && (
+                    <div className="mb-8 space-y-4">
+                      {question.imageUrls.map((url: string, idx: number) => (
+                        <div key={idx} className="rounded-xl overflow-hidden border border-navy-700 bg-white/5 p-2">
+                          <img 
+                            src={url} 
+                            alt={`Figure ${idx + 1}`} 
+                            className="w-full h-auto object-contain max-h-[500px]"
+                          />
+                          <p className="text-center text-xs text-slate-500 mt-2 italic">Source: PubMed Central</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {question.distractorExplanations && (
                     <div className="space-y-3 pt-4 border-t border-navy-700">
                       <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Why other answers are wrong</div>
@@ -524,7 +665,7 @@ function PracticePageInner() {
                   )}
 
                   <div className="mt-6 flex gap-3">
-                    <Button variant="outline" size="sm" onClick={() => setFlagModalQuestionId(question.id)}>
+                    <Button variant="outline" size="sm" onClick={() => setFlagModalQuestionId(question.id ?? null)}>
                       <Flag className="w-4 h-4 mr-2" />
                       Flag Question
                     </Button>
@@ -591,7 +732,7 @@ function PracticePageInner() {
 
   // ─── Render: Session Report ───────────────────────────────
 
-  const renderSessionReport = (reportSubject: McatSubject, reportQuestions: DummyQuestion[], reportResults: { question: DummyQuestion; userAnswer?: string; correct: boolean }[], reportCorrectCount: number, onExit: () => void, onContinue?: () => void, animate?: boolean) => {
+  const renderSessionReport = (reportSubject: McatSubject, reportQuestions: GeneratedQuestion[], reportResults: { question: GeneratedQuestion; userAnswer?: string; correct: boolean }[], reportCorrectCount: number, onExit: () => void, onContinue?: () => void, animate?: boolean) => {
     const { topicEloChanges, netTotal } = computeEloChanges(reportResults);
     const subjectCfg = SUBJECT_CONFIG[reportSubject];
 
@@ -686,9 +827,48 @@ function PracticePageInner() {
     );
   }
 
+  // ─── Render: Loading / Error while fetching session ────────
+
+  if (sessionActive && (fetchingSession || fetchingError || sessionQuestions.length === 0)) {
+    return (
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar />
+        <main className="flex-1 overflow-y-auto bg-navy-900 flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center gap-6 max-w-md text-center">
+            {fetchingError ? (
+              <>
+                <XCircle className="w-16 h-16 text-red-500 mb-2" />
+                <h2 className="text-2xl font-bold text-white">Oops! Fetching Error</h2>
+                <p className="text-slate-400">{fetchingError}</p>
+                <div className="flex gap-4 mt-6">
+                  <Button variant="outline" onClick={exitSession}>Go Back</Button>
+                  <Button variant="primary" onClick={() => { setFetchingError(null); exitSession(); }}>Go Back</Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="relative">
+                  <div className="w-20 h-20 border-4 border-neon-blue/20 border-t-neon-blue rounded-full animate-spin shadow-[0_0_20px_rgba(0,216,232,0.3)]" />
+                  <Zap className="w-8 h-8 text-neon-blue absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-2">Building Your Sourced Session</h2>
+                  <p className="text-slate-400">Fetching real scientific figures and grounding questions in Open Access research...</p>
+                </div>
+                <div className="w-full h-1.5 bg-navy-800 rounded-full mt-4 overflow-hidden">
+                   <div className="h-full bg-neon-blue w-[70%] animate-[shimmer_2s_infinite]" style={{ backgroundSize: '200% 100%', backgroundImage: 'linear-gradient(90deg, #00D8E8 0%, #00B8C7 50%, #00D8E8 100%)' }} />
+                </div>
+              </>
+            )}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   // ─── Render: Session complete ─────────────────────────────
 
-  if (sessionActive && !sessionQuestions[currentIndex] && currentIndex >= sessionQuestions.length) {
+  if (sessionActive && sessionQuestions.length > 0 && currentIndex >= sessionQuestions.length) {
     // Save to history on first render of this screen
     if (sessionResults.length > 0 && (practiceHistory.length === 0 || practiceHistory[0].questions !== sessionQuestions)) {
       saveToHistory();
@@ -708,8 +888,6 @@ function PracticePageInner() {
       true
     );
   }
-
-  // ─── Render: Active question session ──────────────────────
 
   if (sessionActive && sessionQuestions.length > 0) {
     const question = sessionQuestions[currentIndex];
@@ -766,7 +944,24 @@ function PracticePageInner() {
                 {question.passage && (
                   <Card className="bg-navy-800/80 backdrop-blur-sm">
                     <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Passage</h3>
-                    <p className="text-slate-200 leading-relaxed whitespace-pre-line text-[15px]">{question.passage}</p>
+                    <p className="text-slate-200 leading-relaxed whitespace-pre-line text-[15px] mb-6">{question.passage}</p>
+                    
+                    {question.imageUrls && question.imageUrls.length > 0 && (
+                      <div className="space-y-6 mt-4 border-t border-navy-700 pt-6">
+                        {question.imageUrls.map((url: string, idx: number) => (
+                          <div key={idx} className="rounded-xl overflow-hidden border border-navy-600 bg-white/5 p-4 flex flex-col items-center">
+                            <img 
+                              src={url} 
+                              alt={`Passage Figure ${idx + 1}`} 
+                              className="max-w-full h-auto rounded shadow-lg max-h-[600px] object-contain"
+                            />
+                            <p className="text-slate-400 text-xs mt-3 font-medium uppercase tracking-tighter">
+                              Figure {idx + 1}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </Card>
                 )}
 
@@ -862,6 +1057,21 @@ function PracticePageInner() {
                       <p className="text-slate-300 leading-relaxed text-[15px]">{question.explanation}</p>
                     </div>
 
+                    {question.imageUrls && question.imageUrls.length > 0 && (
+                      <div className="mb-8 space-y-4">
+                        {question.imageUrls.map((url: string, idx: number) => (
+                          <div key={idx} className="rounded-xl overflow-hidden border border-navy-700 bg-white/5 p-2 flex flex-col items-center">
+                            <img 
+                              src={url} 
+                              alt={`Figure ${idx + 1}`} 
+                              className="max-w-full h-auto rounded shadow-sm max-h-[500px] object-contain"
+                            />
+                            <p className="text-center text-[10px] text-slate-500 mt-2 font-bold uppercase">Reference Figure {idx + 1}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {/* Distractor explanations */}
                     <div className="space-y-3 border-t border-navy-700 pt-4">
                       <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500">Why the other choices are wrong</h4>
@@ -878,7 +1088,7 @@ function PracticePageInner() {
                     </div>
 
                     <div className="mt-6 flex gap-3">
-                      <Button variant="outline" size="sm" onClick={() => setFlagModalQuestionId(question.id)}>
+                      <Button variant="outline" size="sm" onClick={() => setFlagModalQuestionId(question.id ?? null)}>
                         <Flag className="w-4 h-4 mr-2" />
                         Flag Question
                       </Button>
@@ -938,7 +1148,7 @@ function PracticePageInner() {
                   <div className="flex justify-between">
                     <span className="text-slate-400 text-sm">Chapter</span>
                     <span className="text-white text-sm font-medium truncate max-w-[140px]">
-                      {MCAT_CHAPTERS[question.subject].find((c) => c.id === question.chapterId)?.name ?? question.chapterId}
+                      {question.chapterId ? (MCAT_CHAPTERS[question.subject].find((c) => c.id === question.chapterId)?.name ?? question.chapterId) : 'General'}
                     </span>
                   </div>
                   <div className="flex justify-between">
