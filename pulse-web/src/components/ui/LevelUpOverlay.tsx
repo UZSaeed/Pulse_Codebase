@@ -82,14 +82,21 @@ export const LevelUpOverlay: React.FC<LevelUpOverlayProps> = ({
   const { fireConfetti } = useConfetti();
   const [visible, setVisible] = useState(false);
 
+  // Negative xpGained indicates a rank/level down
+  const isNegative = xpGained < 0;
+
   useEffect(() => {
     if (show) {
       setVisible(true);
-      // Fire confetti after a small delay for dramatic effect
-      const confettiTimer = setTimeout(() => {
-        fireConfetti();
-        setTimeout(() => fireConfetti(), 300);
-      }, 500);
+      
+      let confettiTimer: NodeJS.Timeout | undefined;
+      // Only fire confetti if it's a positive gain
+      if (!isNegative) {
+        confettiTimer = setTimeout(() => {
+          fireConfetti();
+          setTimeout(() => fireConfetti(), 300);
+        }, 500);
+      }
 
       // Auto-dismiss after 5 seconds
       const dismissTimer = setTimeout(() => {
@@ -98,15 +105,29 @@ export const LevelUpOverlay: React.FC<LevelUpOverlayProps> = ({
       }, 5000);
 
       return () => {
-        clearTimeout(confettiTimer);
+        if (confettiTimer) clearTimeout(confettiTimer);
         clearTimeout(dismissTimer);
       };
     }
-  }, [show, fireConfetti, onDismiss]);
+  }, [show, fireConfetti, onDismiss, isNegative]);
 
   if (!show && !visible) return null;
 
-  const colors = RANK_COLORS[newRank.rank];
+  // Decide colors and title based on positive vs negative change
+  const title = rankChanged 
+    ? (isNegative ? 'Rank Down' : 'Rank Up!') 
+    : (isNegative ? 'Level Down' : 'Level Up!');
+
+  const colors = isNegative 
+    ? { gradient: 'from-red-500 to-rose-400', text: 'text-red-900', shadow: 'shadow-red-500/50' }
+    : RANK_COLORS[newRank.rank];
+
+  const titleColor = isNegative 
+    ? 'text-red-500 drop-shadow-[0_0_16px_rgba(239,68,68,0.5)]' 
+    : 'text-white drop-shadow-[0_0_16px_rgba(255,255,255,0.3)]';
+
+  const xpColor = isNegative ? 'text-red-400' : 'text-emerald-400';
+  const xpPrefix = isNegative ? '' : '+'; // Negative numbers inherently have a minus sign
 
   return (
     <div
@@ -118,25 +139,27 @@ export const LevelUpOverlay: React.FC<LevelUpOverlayProps> = ({
 
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center text-center">
-        {/* Lottie animation behind the rank badge */}
+        {/* Lottie animation behind the rank badge (only for positive gain) */}
         <div className="relative w-64 h-64 flex items-center justify-center">
-          <Lottie
-            animationData={celebrationAnimation}
-            loop={true}
-            className="absolute inset-0 w-full h-full"
-          />
+          {!isNegative && (
+            <Lottie
+              animationData={celebrationAnimation}
+              loop={true}
+              className="absolute inset-0 w-full h-full"
+            />
+          )}
           
           {/* Rank icon in center */}
           <div className="relative z-10 flex flex-col items-center">
-            <span className="text-7xl drop-shadow-[0_0_20px_rgba(0,216,232,0.6)] animate-bounce">
+            <span className={`text-7xl drop-shadow-[0_0_20px_rgba(0,216,232,0.6)] animate-bounce`}>
               {newRank.icon}
             </span>
           </div>
         </div>
 
         {/* Title */}
-        <h1 className="text-4xl font-display font-black uppercase tracking-[0.3em] text-white mt-2 drop-shadow-[0_0_16px_rgba(255,255,255,0.3)]">
-          {rankChanged ? 'Rank Up!' : 'Level Up!'}
+        <h1 className={`text-4xl font-display font-black uppercase tracking-[0.3em] mt-2 ${titleColor}`}>
+          {title}
         </h1>
 
         {/* Rank display */}
@@ -150,8 +173,8 @@ export const LevelUpOverlay: React.FC<LevelUpOverlayProps> = ({
         </div>
 
         {/* XP gained */}
-        <div className="mt-2 text-emerald-400 font-bold text-sm uppercase tracking-widest">
-          +{xpGained} XP
+        <div className={`mt-2 font-bold text-sm uppercase tracking-widest ${xpColor}`}>
+          {xpPrefix}{xpGained} XP
         </div>
 
         {/* Rank transition */}
@@ -161,7 +184,7 @@ export const LevelUpOverlay: React.FC<LevelUpOverlayProps> = ({
             <span>{oldRank.displayName}</span>
             <span className="text-neon-blue text-xl">→</span>
             <span className="text-lg">{newRank.icon}</span>
-            <span className="text-white font-bold">{newRank.displayName}</span>
+            <span className={`${isNegative ? 'text-red-400' : 'text-emerald-400'} font-bold`}>{newRank.displayName}</span>
           </div>
         )}
 
