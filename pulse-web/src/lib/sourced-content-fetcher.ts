@@ -239,6 +239,78 @@ export function classifyFigure(caption: string): FigureType {
   return 'other';
 }
 
+// ---------------------------------------------------------------------------
+// 3b. MCAT Figure Appropriateness Filter
+// ---------------------------------------------------------------------------
+
+/**
+ * Reject figures that depict non-MCAT-appropriate techniques/imaging.
+ * Returns true if the figure is MCAT-appropriate, false if it should be rejected.
+ *
+ * MCAT-appropriate: standard bar/line graphs, Michaelis-Menten curves,
+ *   Lineweaver-Burk plots, SDS-PAGE gels, Western blots, basic schematics,
+ *   oxygen dissociation curves, Eadie-Hofstee, simple diagrams.
+ *
+ * NOT MCAT-appropriate: confocal/fluorescence microscopy, cryo-EM, flow cytometry,
+ *   mass spectrometry, multi-panel research figures, AFM, FRET, super-resolution,
+ *   PET/CT imaging, electropherograms, HPLC chromatograms, NMR spectra of
+ *   complex molecules, etc.
+ */
+export function isFigureMCATAppropriate(caption: string): boolean {
+  const lower = caption.toLowerCase();
+
+  // ── REJECT patterns: advanced imaging, complex lab techniques ──
+  const rejectPatterns = [
+    // Advanced microscopy
+    /\b(confocal|fluorescen(ce|t)\s*microscop|electron\s*microscop|cryo[- ]?(em|electron)|transmission\s*electron|scanning\s*electron|SEM\b|TEM\b|super[- ]?resolution|STED|PALM|STORM|two[- ]?photon|light\s*sheet|multiphoton)\b/i,
+    // Flow cytometry / FACS
+    /\b(flow\s*cytometr|FACS|fluorescence[- ]activated|scatter\s*plot.*SSC|FSC.*SSC|gating\s*strateg|dot\s*plot.*CD\d)\b/i,
+    // Mass spectrometry
+    /\b(mass\s*spectromet|LC[- ]?MS|GC[- ]?MS|MALDI|tandem\s*mass|MS\/MS|ESI[- ]?MS|QTOF|orbitrap|ion\s*trap|m\/z\s*ratio)\b/i,
+    // Advanced sequencing / omics
+    /\b(RNA[- ]?seq|ChIP[- ]?seq|ATAC[- ]?seq|Hi[- ]?C|single[- ]?cell|scRNA|whole[- ]?genome|exome|metagenom|proteomi|metabolomi|lipidomic|transcriptom)\b/i,
+    // Advanced structural biology
+    /\b(X[- ]?ray\s*crystall|crystallograph|diffraction\s*pattern|Å\s*resolution|angstrom|cryo[- ]?EM\s*structure|electron\s*density)\b/i,
+    // Advanced biophysics / imaging
+    /\b(atomic\s*force\s*microscop|AFM|FRET|surface\s*plasmon|SPR|biolayer\s*interfero|circular\s*dichroism|CD\s*spectr)\b/i,
+    // Clinical / diagnostic imaging beyond MCAT
+    /\b(PET[- ]?CT|SPECT|angiograph|arteriograph|cardiac\s*catheter|coronary\s*angiogra)\b/i,
+    // Advanced molecular techniques
+    /\b(optogenetic|patch[- ]?clamp|electrophysiolog|voltage[- ]?clamp|current[- ]?clamp)\b/i,
+    // Bioinformatics visuals
+    /\b(heat\s*map.*gene|volcano\s*plot|principal\s*component|PCA\s*plot|cluster\s*analysis|phylogenetic\s*tree.*bootstrap|network\s*analysis|STRING)\b/i,
+    // Complex multi-panel indicators
+    /\b(representative\s*image|micrograph|photomicrograph|histolog.*stain|immunohistochem|immunofluorescen|H\s*&\s*E\s*stain)\b/i,
+  ];
+
+  for (const pattern of rejectPatterns) {
+    if (pattern.test(lower)) {
+      return false;
+    }
+  }
+
+  // ── APPROVE patterns: standard MCAT-level figures ──
+  const approvePatterns = [
+    /\b(bar\s*(chart|graph)|line\s*(chart|graph)|scatter\s*plot|curve|histogram)\b/i,
+    /\b(Michaelis[- ]?Menten|Lineweaver[- ]?Burk|Eadie[- ]?Hofstee|enzyme\s*kinetic)\b/i,
+    /\b(SDS[- ]?PAGE|gel\s*electrophoresis|western\s*blot|immunoblot)\b/i,
+    /\b(oxygen\s*dissociation|hemoglobin.*curve|dose[- ]?response)\b/i,
+    /\b(schematic|diagram|pathway|flowchart|overview|illustration|model)\b/i,
+    /\b(growth\s*curve|survival\s*curve|titration\s*curve|pH.*curve)\b/i,
+    /\b(table|percent|frequency|proportion|mean|standard\s*deviation)\b/i,
+    /\b(graph|chart|plot|data|results?\s*show|figure\s*shows)\b/i,
+  ];
+
+  for (const pattern of approvePatterns) {
+    if (pattern.test(lower)) {
+      return true;
+    }
+  }
+
+  // If no strong signal either way, reject by default (conservative)
+  return false;
+}
+
 /**
  * Extract figure passages from a BioC document.
  * Filters for passages with section_type === 'FIG'.
@@ -283,27 +355,65 @@ function extractFiguresFromBioC(doc: BioCDocument, pmcId: string): SourcedFigure
 // ---------------------------------------------------------------------------
 
 /**
- * Extract the main body text from a BioC document, excluding figures, tables,
- * references, and supplementary materials.
+ * Extract the main body text from a BioC document.
+ *
+ * MCAT SCOPE: Only include INTRODUCTION, RESULTS (first ~500 words), and
+ * DISCUSSION. Explicitly EXCLUDE Methods/Materials/Experimental Procedures
+ * to prevent advanced lab protocol descriptions from contaminating the
+ * passage text that gets fed to the LLM.
  */
 function extractPassageText(doc: BioCDocument): string {
+  // Sections to EXCLUDE entirely
   const excludedSections = new Set([
     'FIG', 'FIGURE', 'TABLE', 'REF', 'SUPPL', 'COMP_INT',
     'AUTH_CONT', 'ACK_FUND', 'KEYWORD', 'ABBR',
   ]);
 
+  // Methods/Materials sections to EXCLUDE (critical for MCAT scope)
+  const methodsSections = new Set([
+    'METHODS', 'MATERIALS', 'MATERIALS AND METHODS',
+    'METHODS AND MATERIALS', 'EXPERIMENTAL', 'EXPERIMENTAL PROCEDURES',
+    'EXPERIMENTAL SECTION', 'SUBJECTS AND METHODS', 'STUDY DESIGN',
+    'MATERIALS & METHODS', 'PROCEDURES', 'PROTOCOL',
+  ]);
+
   const textParts: string[] = [];
+  let resultsWordCount = 0;
+  const MAX_RESULTS_WORDS = 500; // Cap results section to prevent data-dump contamination
 
   for (const passage of doc.passages) {
     const sectionType = (passage.infons?.section_type || '').toUpperCase();
     const type = (passage.infons?.type || '').toUpperCase();
+    const sectionName = (passage.infons?.section || '').toUpperCase();
 
     // Skip non-body sections
     if (excludedSections.has(sectionType) || excludedSections.has(type)) continue;
     if (type === 'FRONT' || type === 'BACK' || type === 'REF') continue;
 
+    // Skip Methods/Materials sections (MCAT scope enforcement)
+    if (methodsSections.has(sectionType) || methodsSections.has(sectionName)) continue;
+    // Also catch methods by partial match in section name
+    if (sectionName.includes('METHOD') || sectionName.includes('MATERIAL') ||
+        sectionName.includes('EXPERIMENTAL') || sectionName.includes('PROCEDURE')) continue;
+
     const text = passage.text?.trim();
     if (!text || text.length < 30) continue;
+
+    // Cap Results section to prevent overwhelming detail
+    if (sectionType === 'RESULTS' || sectionName.includes('RESULT')) {
+      const wordCount = text.split(/\s+/).length;
+      if (resultsWordCount + wordCount > MAX_RESULTS_WORDS) {
+        // Take partial results to hit cap
+        if (resultsWordCount < MAX_RESULTS_WORDS) {
+          const remaining = MAX_RESULTS_WORDS - resultsWordCount;
+          const truncatedWords = text.split(/\s+/).slice(0, remaining);
+          textParts.push(truncatedWords.join(' '));
+        }
+        resultsWordCount = MAX_RESULTS_WORDS;
+        continue;
+      }
+      resultsWordCount += wordCount;
+    }
 
     textParts.push(text);
   }
@@ -415,12 +525,15 @@ export async function fetchSourcedContent(
       // Extract figures (only for science sections)
       let figures: SourcedFigure[] = [];
       if (needsFigures) {
-        figures = extractFiguresFromBioC(doc, pmcId);
+        const rawFigures = extractFiguresFromBioC(doc, pmcId);
 
-        // Prioritize papers with classified (non-"other") figures
-        const classifiedFigures = figures.filter((f) => f.figureType !== 'other');
+        // MCAT APPROPRIATENESS FILTER: reject figures depicting advanced techniques
+        const mcatApprovedFigures = rawFigures.filter((f) => isFigureMCATAppropriate(f.caption));
+        console.log(`[SourcedFetcher] ${pmcId}: ${rawFigures.length} total figures, ${mcatApprovedFigures.length} MCAT-appropriate`);
+
+        // From approved figures, prioritize classified (non-"other") ones
+        const classifiedFigures = mcatApprovedFigures.filter((f) => f.figureType !== 'other');
         if (classifiedFigures.length > 0) {
-          // Sort by figure type priority and take top 2
           const priorityOrder: Record<FigureType, number> = {
             bar_chart: 0,
             line_graph: 1,
@@ -431,10 +544,12 @@ export async function fetchSourcedContent(
           figures = [...classifiedFigures]
             .sort((a, b) => priorityOrder[a.figureType] - priorityOrder[b.figureType])
             .slice(0, 2);
-        } else {
-          // Fall back to any figures (up to 2)
-          figures = figures.slice(0, 2);
+        } else if (mcatApprovedFigures.length > 0) {
+          // Fall back to any MCAT-approved figures (up to 2)
+          figures = mcatApprovedFigures.slice(0, 2);
         }
+        // If NO MCAT-appropriate figures exist, figures stays empty []
+        // The generator will handle this gracefully (text-only questions)
       }
 
       if (needsFigures && figures.length > 0) {

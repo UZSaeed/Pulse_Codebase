@@ -82,14 +82,25 @@ Rules:
 5. Provide a detailed, step-by-step explanation for the correct answer, AND distinct explanations for why each distractor is wrong.
 6. If the passage or question would benefit from a scientific visual, chart, molecular structure, or graph, provide an extremely descriptive 'imagePrompt' that can be given to an image generation model (like DALL-E 3) to create it. If no visual is needed, set 'imagePrompt' to null.
 
-7. CRITICAL SCOPE ENFORCEMENT: The provided research paper WILL be highly advanced (e.g., graduate-level, specialized clinical medicine, advanced materials engineering). **YOU MUST STRIP AWAY THE COMPLEXITY**. Only use the paper as a backdrop. ALL questions MUST test ONLY foundational, 100-level undergraduate science concepts (e.g., Gen Chem: Stoichiometry, electron configurations, VSEPR; Biology: central dogma, basic cell structures; Physics: basic kinematics, rudimentary circuits). If the paper uses a complex transition-metal catalyst, ask a basic question about transition metal characteristics. **NEVER ask a question that requires prior knowledge of the advanced topic.**
-8. FORBIDDEN TOPICS: NEVER ask questions about band gaps, semiconductor physics, solid-state lattice constants, quantum computing, or engineering-specific measurements.
-9. MANDATORY PIVOTS: If you see a complex paper, you MUST pivot to one of these foundational concepts:
-   - Atomic Structure (valence electrons, subshell configuration, Zeff, atomic/ionic radius).
-   - Bonding (electronegativity differences, bond polarity, octet rule, hybridization).
-   - Periodic Trends (ionization energy, electron affinity).
-   - Stoichiometry (limiting reagents, percent yield).
-   - Laboratory Techniques (identifying controls, independent vs dependent variables).
+7. SCOPE ENFORCEMENT: ALL questions MUST test ONLY content within these MCAT domains:
+   - Biology: cell biology, genetics, organ systems, central dogma, evolution
+   - General Chemistry: stoichiometry, atomic structure, bonding, acids/bases, equilibrium, thermochemistry, electrochemistry, gas laws
+   - Organic Chemistry: functional groups, reaction mechanisms, stereochemistry, carbonyl chemistry, amino acid structure
+   - Biochemistry: enzyme kinetics, metabolic pathways, amino acid properties, protein structure, membrane transport
+   - Physics: kinematics, forces, work/energy, fluids, electrostatics, circuits, optics, waves/sound
+   - Psychology/Sociology: learning, memory, cognition, social psychology, developmental psychology, sensation/perception
+
+8. FORBIDDEN TOPICS: NEVER ask questions about band gaps, semiconductor physics, solid-state lattice constants, quantum computing, engineering-specific measurements, advanced imaging interpretation (cryo-EM, flow cytometry, mass spectrometry), drug design/pharmacokinetics, computational biology, or machine learning.
+
+9. MANDATORY PIVOTS: If source material references an advanced topic, pivot to a related foundational concept:
+   - Complex enzyme mechanism → basic Km, Vmax, inhibition types
+   - Advanced cell signaling → basic receptors, second messengers
+   - Genetic engineering → central dogma, mutations, inheritance
+   - Advanced physiology → basic organ system function, homeostasis
+   - Behavioral neuroscience → neurotransmitter function, conditioning
+   - Complex statistics → identifying IV/DV, control groups, basic experimental design
+
+10. SELF-CHECK: Before finalizing, ask: "Could a pre-med student answer this using only standard undergraduate textbooks?" If NO, rewrite.
 
 You MUST respond with valid JSON matching the schema provided.`;
 
@@ -322,4 +333,74 @@ export async function explainChat(
 
   const data = await response.json();
   return data.choices?.[0]?.message?.content ?? 'Sorry, I could not generate a response.';
+}
+
+// ---------------------------------------------------------------------------
+// Post-generation scope validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate that a generated question is within MCAT scope.
+ * Makes a fast secondary LLM call to check if the question could be answered
+ * by an undergraduate student using standard textbooks.
+ *
+ * Returns { valid: true } if in scope, or { valid: false, reason: string } if not.
+ */
+export async function validateQuestionScope(
+  apiKey: string,
+  question: { stem: string; choices: { label: string; text: string }[]; passage?: string | null; explanation: string },
+  modelTier: ModelTier = 'economy'
+): Promise<{ valid: boolean; reason?: string }> {
+  const model = getModelName(modelTier);
+
+  const questionContext = [
+    question.passage ? `Passage excerpt: ${question.passage.substring(0, 300)}...` : '',
+    `Question: ${question.stem}`,
+    `Choices: ${question.choices.map(c => `${c.label}) ${c.text}`).join(' | ')}`,
+  ].filter(Boolean).join('\n');
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.0,
+        max_tokens: 200,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an MCAT content scope validator. Your job is to determine whether a practice question tests content within MCAT scope. MCAT tests: undergraduate biology, general chemistry, organic chemistry, biochemistry, physics, psychology, and sociology. If the question requires specialized graduate-level knowledge, advanced lab technique interpretation, or engineering concepts to answer correctly, it is OUT OF SCOPE. Respond with JSON: {"valid": true} or {"valid": false, "reason": "brief explanation"}. No markdown fences.',
+          },
+          {
+            role: 'user',
+            content: `Could an undergraduate pre-med student answer this using only standard Biology, Chemistry, Physics, and Psychology textbooks plus the provided passage context?\n\n${questionContext}`,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn('[ScopeValidation] API error, assuming valid:', response.status);
+      return { valid: true };
+    }
+
+    const data = await response.json();
+    const content = (data.choices?.[0]?.message?.content ?? '').trim();
+    const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    try {
+      const result = JSON.parse(cleaned);
+      return { valid: !!result.valid, reason: result.reason };
+    } catch {
+      console.warn('[ScopeValidation] Failed to parse response:', cleaned);
+      return { valid: true }; // Fail-open
+    }
+  } catch (err) {
+    console.warn('[ScopeValidation] Error:', err);
+    return { valid: true }; // Fail-open on network errors
+  }
 }

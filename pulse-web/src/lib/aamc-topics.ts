@@ -619,13 +619,29 @@ export function getRandomPMCQuery(topic: string, subject?: McatSubject): string 
   if (subject === 'cars') return baseQuery;
 
   // ──────────────────────────────────────────────────────────────────────────
-  // CRITICAL MCAT SCOPE FILTER FOR PUBMED CENTRAL
-  // Prevent advanced material science, heavy engineering, and phase 3 clinical trials.
-  // Force overlap with biology, basic chemistry, classic lab assays (gels, chromatography).
+  // MCAT SCOPE FILTER v2 — Review Article Targeting + Journal Whitelist
+  //
+  // Strategy:
+  //   1. TARGET review articles — they synthesize foundational knowledge and
+  //      read much closer to MCAT passages than primary research papers.
+  //   2. WHITELIST journals that publish educational, broad-scope content.
+  //   3. INCLUDE terms that bias toward foundational/educational framing.
+  //   4. EXCLUDE advanced techniques, niche methodologies, and engineering.
   // ──────────────────────────────────────────────────────────────────────────
-  const mcatFilters = `AND (biochemistry OR biological OR medicine OR foundational OR assay OR "western blot" OR chromatography OR "gel electrophoresis") NOT (nanoparticle OR nanomaterial OR "materials science" OR "clinical trial" OR randomized OR "tissue engineering" OR "machine learning" OR MOF OR ZIF OR electrocatalyst OR Pyrolysis OR encapsulation OR "advanced materials" OR lattice OR "scanning tunneling" OR STM OR semiconductor OR epitaxy OR GaAs OR "quantum dot" OR "solid state")`;
 
-  return `${baseQuery} ${mcatFilters}`;
+  // 1. Review article filter  
+  const reviewFilter = `AND "review"[Filter]`;
+
+  // 2. Journal whitelist — broad-scope, educational, foundational journals
+  const journalWhitelist = `AND ("PLoS Biol"[Journal] OR "PLoS One"[Journal] OR "J Biol Chem"[Journal] OR "CBE Life Sci Educ"[Journal] OR "Biochem Mol Biol Educ"[Journal] OR "Front Physiol"[Journal] OR "Front Mol Biosci"[Journal] OR "Front Immunol"[Journal] OR "Front Psychol"[Journal] OR "Front Neurosci"[Journal] OR "Int J Mol Sci"[Journal] OR "Molecules"[Journal] OR "Cells"[Journal] OR "Biomolecules"[Journal] OR "Physiol Rev"[Journal] OR "Annu Rev Biochem"[Journal] OR "Trends Biochem Sci"[Journal] OR "Nat Rev Mol Cell Biol"[Journal] OR "Am J Physiol"[Journal] OR "BMC Biol"[Journal] OR "BMC Biochem"[Journal] OR "Sci Rep"[Journal] OR "eLife"[Journal] OR "Proc Natl Acad Sci U S A"[Journal])`;
+
+  // 3. Foundational bias terms
+  const foundationalBias = `AND (mechanism OR pathway OR regulation OR physiology OR "basic mechanism" OR fundamental OR homeostasis OR metabolism)`;
+
+  // 4. Comprehensive exclusion of advanced techniques and non-MCAT domains
+  const advancedExclusions = `NOT (nanoparticle OR nanomaterial OR "materials science" OR "clinical trial" OR randomized OR "tissue engineering" OR "machine learning" OR "deep learning" OR "artificial intelligence" OR MOF OR ZIF OR electrocatalyst OR Pyrolysis OR encapsulation OR "advanced materials" OR lattice OR "scanning tunneling" OR STM OR semiconductor OR epitaxy OR GaAs OR "quantum dot" OR "solid state" OR "Cryo-EM" OR "cryo-electron" OR "X-ray crystallography" OR "flow cytometry" OR "mass spectrometry imaging" OR "MALDI" OR "single-cell sequencing" OR "RNA-seq" OR "ChIP-seq" OR "ATAC-seq" OR optogenetics OR "super-resolution" OR "confocal microscopy" OR "atomic force microscopy" OR AFM OR "surface plasmon" OR FRET OR "fluorescence lifetime" OR "next-generation sequencing" OR "whole-genome sequencing" OR proteomics OR metabolomics OR lipidomics OR "systems biology" OR bioinformatics OR "computational biology" OR "molecular dynamics simulation" OR "in silico" OR "CRISPR screen" OR "knockout mouse" OR "transgenic mouse" OR "gene therapy" OR "CAR-T" OR immunotherapy OR "checkpoint inhibitor" OR "monoclonal antibody therapy" OR "phase III" OR "phase II" OR pharmacokinetics OR "drug delivery" OR "nanocarrier" OR biofilm OR "quorum sensing")`;
+
+  return `${baseQuery} ${reviewFilter} ${journalWhitelist} ${foundationalBias} ${advancedExclusions}`;
 }
 
 // ---------------------------------------------------------------------------

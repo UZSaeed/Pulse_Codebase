@@ -10,6 +10,7 @@ import {
   generateQuestion,
   generateSourcedQuestions,
   selectModelTier,
+  validateQuestionScope,
   type GenerateQuestionOptions,
 } from '@/lib/ai';
 import { checkAndExpandQuestionBank, checkAndExpandWithSourcedContent } from '@/lib/question-bank';
@@ -146,8 +147,31 @@ export async function POST(request: NextRequest) {
         });
 
         if (sourcedSet && sourcedSet.questions_array.length > 0) {
-          const savedQuestions = [];
-          for (const q of sourcedSet.questions_array) {
+          // Post-generation scope validation: filter out-of-scope questions
+          const scopeChecks = await Promise.all(
+            sourcedSet.questions_array.map(async (q) => {
+              const result = await validateQuestionScope(apiKey, {
+                stem: q.stem,
+                choices: q.choices,
+                passage: sourcedSet.passage_text,
+                explanation: q.explanation,
+              });
+              if (!result.valid) {
+                console.warn(`[ScopeValidation] Rejected question: "${q.stem.substring(0, 60)}..." Reason: ${result.reason}`);
+              }
+              return { question: q, valid: result.valid, reason: result.reason };
+            })
+          );
+
+          const validQuestions = scopeChecks.filter(sc => sc.valid).map(sc => sc.question);
+          const rejectedCount = scopeChecks.length - validQuestions.length;
+          if (rejectedCount > 0) {
+            console.log(`[ScopeValidation] ${rejectedCount}/${scopeChecks.length} questions rejected as out-of-scope`);
+          }
+
+          if (validQuestions.length > 0) {
+            const savedQuestions = [];
+            for (const q of validQuestions) {
             const created = await prisma.question.create({
               data: {
                 subject: sourcedSet.subject_metadata.subject,
@@ -187,6 +211,7 @@ export async function POST(request: NextRequest) {
             sourcePmcId: sq.sourcePmcId,
           }));
           return NextResponse.json({ question: formattedQs[0], questions: formattedQs, modelTier });
+          }
         }
       } catch (err) {
         console.warn('[Generate Route] Sourced generation inline failed, falling back to hallucinated', err);
