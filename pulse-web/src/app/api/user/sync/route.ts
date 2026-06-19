@@ -22,8 +22,8 @@ export async function POST(request: Request) {
       },
     });
 
-    // Ensure SubjectStats exist for all 4 MCAT subjects
-    const subjects = ['chem_phys', 'cars', 'bio_biochem', 'psych_soc'];
+    // Ensure SubjectStats exist for SAT sections
+    const subjects = ['reading_writing', 'math'];
     for (const subject of subjects) {
       await prisma.subjectStats.upsert({
         where: { userId_subject: { userId: id, subject } },

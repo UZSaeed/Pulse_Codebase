@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sat:extract": "C:\\Users\\hamiz\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe scripts\\extract_sat_question_bank.py",
+    "sat:import": "tsx scripts/import_official_sat_bank.ts"
   },
   "dependencies": {
     "@babel/runtime": "^7.29.2",
@@ -38,6 +40,7 @@
     "prettier": "^3.8.1",
     "prisma": "^7.5.0",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }

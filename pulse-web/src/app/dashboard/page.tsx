@@ -1,172 +1,176 @@
 'use client';
 
+import Link from 'next/link';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { RadarChart } from '@/components/ui/RadarChart';
 import { useUserProfile } from '@/context/UserProfileContext';
-import { MCAT_SUBJECTS, SUBJECT_LABELS, getTieredRank, RANK_COLORS, type McatSubject } from '@/lib/elo';
-import { getXpMultiplier } from '@/lib/userProfile';
-import Link from 'next/link';
+import { MCAT_SUBJECTS, SUBJECT_LABELS, RANK_COLORS, type McatSubject } from '@/lib/elo';
+import { MCAT_CHAPTERS } from '@/lib/chapters';
 
-const SUBJECT_CONFIG: Record<McatSubject, { icon: string; gradient: string }> = {
-  chem_phys: { icon: '⚗️', gradient: 'from-blue-500 to-cyan-400' },
-  cars: { icon: '📖', gradient: 'from-purple-500 to-pink-400' },
-  bio_biochem: { icon: '🧬', gradient: 'from-green-500 to-emerald-400' },
-  psych_soc: { icon: '🧠', gradient: 'from-orange-500 to-yellow-400' },
+const SECTION_CONFIG: Record<McatSubject, { icon: string; gradient: string }> = {
+  reading_writing: { icon: 'R', gradient: 'from-cyan-400 to-blue-500' },
+  math: { icon: 'M', gradient: 'from-emerald-400 to-lime-500' },
 };
 
-export default function Home() {
+const OFFICIAL_BANK_TOTAL = 1184;
+
+export default function DashboardPage() {
   const { profile, loading } = useUserProfile();
-  const overallRank = profile.overallRank;
-  const colors = RANK_COLORS[overallRank.rank];
 
   if (loading) {
     return (
       <div className="flex h-screen overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto bg-navy-900 p-8 flex items-center justify-center">
+        <main className="flex flex-1 items-center justify-center bg-navy-900">
           <div className="flex flex-col items-center gap-4">
-            <div className="w-10 h-10 border-2 border-neon-blue border-t-transparent rounded-full animate-spin" />
-            <p className="text-slate-400 text-sm font-medium">Loading your profile...</p>
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-neon-blue border-t-transparent" />
+            <p className="text-sm font-medium text-slate-400">Loading your SAT profile...</p>
           </div>
         </main>
       </div>
     );
   }
 
-  // Radar chart data
-  const radarData = MCAT_SUBJECTS.map((s) => ({
-    subject: s,
-    label: SUBJECT_LABELS[s],
-    icon: SUBJECT_CONFIG[s].icon,
-    value: profile.subjects[s].elo,
-    max: 2000, // Chart scale max — lower ceiling pushes Diamond closer to the edge
+  const nextTask = profile.plannerTasks.find((task) => task.status === 'pending');
+  const radarData = MCAT_SUBJECTS.map((subject) => ({
+    subject,
+    label: SUBJECT_LABELS[subject],
+    icon: SECTION_CONFIG[subject].icon,
+    value: profile.subjects[subject].elo,
+    max: 2000,
   }));
 
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
       <main className="flex-1 overflow-y-auto bg-navy-900 p-8">
-        <header className="flex justify-between items-center mb-10">
+        <header className="mb-10 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white mb-2 tracking-tight">Welcome back, {profile.name}</h1>
-            <p className="text-slate-400 font-medium">Your ELO is looking strong today. Let's check your planner.</p>
+            <h1 className="mb-2 text-3xl font-display font-bold tracking-tight text-white">
+              SAT dashboard for {profile.name}
+            </h1>
+            <p className="max-w-2xl font-medium text-slate-400">
+              Your plan prioritizes weaker SAT domains first, then rotates reinforcement as your section ELO and
+              confidence improve.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <Link href="/practice">
+              <Button variant="primary" neon>
+                Start Practice
+              </Button>
+            </Link>
+            <Link href="/planner">
+              <Button variant="outline">Open Planner</Button>
+            </Link>
           </div>
         </header>
-        
-        {/* ── Stats Row ── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          {/* Overall ELO + Rank Badge */}
-          <Card neonHighlight className="flex flex-col gap-2 relative overflow-hidden backdrop-blur-sm bg-navy-800/80">
-            <div className="flex justify-between items-start">
-              <h3 className="text-slate-400 text-sm font-semibold uppercase tracking-wider">Overall ELO</h3>
-              <div className={`bg-gradient-to-br ${colors.gradient} ${colors.text} text-xs font-bold px-3 py-1 rounded-full shadow-lg uppercase tracking-widest flex items-center gap-1.5 ${colors.shadow}`}>
-                <span className="text-sm">{overallRank.icon}</span>
-                {overallRank.displayName}
+
+        {nextTask && (
+          <Card neonHighlight className="mb-8 bg-gradient-to-r from-navy-800 to-cyan-950/40">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-neon-blue">Next up</div>
+                <h2 className="text-2xl font-display font-bold text-white">{nextTask.title}</h2>
+                <p className="mt-2 text-sm text-slate-300">
+                  {nextTask.questionCount ?? 0} questions · {nextTask.phase} phase ·{' '}
+                  {nextTask.targetTopics?.join(', ') || 'Mixed practice'}
+                </p>
               </div>
-            </div>
-            <div className="text-5xl font-display font-bold text-neon-blue mt-2 drop-shadow-[0_0_8px_rgba(0,216,232,0.6)]">{profile.overallElo}</div>
-            {/* Progress to next tier */}
-            {overallRank.eloToNextTier > 0 && (
-              <div className="mt-auto pt-2 relative">
-                <div className="flex justify-between text-xs mb-1.5 font-medium">
-                  <span className="text-slate-400">{overallRank.eloFloor}</span>
-                  <span className="text-slate-400">{overallRank.eloCeiling}</span>
-                </div>
-                <div className="w-full bg-navy-900/90 rounded-full h-3 overflow-hidden border border-navy-700 relative">
-                  <div 
-                    className="bg-gradient-to-r from-cyan-500 to-neon-blue h-full rounded-full transition-all duration-1000 shadow-[0_0_12px_rgba(0,216,232,0.8)] relative overflow-hidden" 
-                    style={{ width: `${overallRank.progressInTier * 100}%` }} 
-                  >
-                    <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.2)_50%,transparent_75%)] bg-[length:1rem_1rem] animate-[shimmer_1s_linear_infinite]" />
-                  </div>
-                </div>
-                <p className="text-xs text-neon-blue mt-2 font-semibold text-center uppercase tracking-widest">{overallRank.eloToNextTier} ELO to next tier</p>
-              </div>
-            )}
-          </Card>
-          
-          {/* Daily Streak */}
-          <Card className="flex flex-col gap-2 backdrop-blur-sm bg-navy-800/80">
-            <h3 className="text-slate-400 text-sm font-semibold uppercase tracking-wider">Daily Streak</h3>
-            <div className="text-5xl font-display font-bold text-white mt-2">
-              {profile.dailyStreak} <span className="text-xl text-slate-500 font-medium tracking-wide">DAYS</span>
-            </div>
-            <div className="text-sm text-slate-400 mt-auto bg-navy-900/50 w-fit px-2.5 py-1 rounded font-medium border border-navy-700">
-              Habit multiplier: <span className="text-neon-blue font-bold tracking-wide">{profile.xpMultiplier.toFixed(1)}x XP</span>
+              <Link href="/practice">
+                <Button variant="primary" neon>
+                  Launch block
+                </Button>
+              </Link>
             </div>
           </Card>
-          
-          {/* Total XP */}
-          <Card className="flex flex-col gap-2 backdrop-blur-sm bg-navy-800/80">
-            <h3 className="text-slate-400 text-sm font-semibold uppercase tracking-wider">Total XP</h3>
-            <div className="text-5xl font-display font-bold text-white mt-2">
-              {profile.totalXp.toLocaleString()} <span className="text-xl text-slate-500 font-medium tracking-wide">XP</span>
+        )}
+
+        <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-4">
+          <Card className="bg-navy-800/80">
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-400">Overall ELO</div>
+            <div className="mt-3 text-5xl font-display font-bold text-neon-blue">{profile.overallElo}</div>
+            <div className="mt-3 text-sm text-slate-400">{profile.overallRank.displayName} adaptive band</div>
+          </Card>
+          <Card className="bg-navy-800/80">
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-400">Daily streak</div>
+            <div className="mt-3 text-5xl font-display font-bold text-white">{profile.dailyStreak}</div>
+            <div className="mt-3 text-sm text-slate-400">{profile.xpMultiplier.toFixed(2)}x XP multiplier</div>
+          </Card>
+          <Card className="bg-navy-800/80">
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-400">Latest scores</div>
+            <div className="mt-3 text-lg font-semibold text-white">
+              RW {profile.preferences.recentReadingWritingScore ?? '—'}
             </div>
-            <div className="text-sm text-emerald-400 mt-auto flex items-center gap-1.5 font-bold bg-emerald-400/10 w-fit px-2 py-1 rounded">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-              Multiplier: {profile.xpMultiplier.toFixed(1)}x
+            <div className="mt-1 text-lg font-semibold text-white">
+              Math {profile.preferences.recentMathScore ?? '—'}
             </div>
+          </Card>
+          <Card className="bg-navy-800/80">
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-400">Official bank</div>
+            <div className="mt-3 text-5xl font-display font-bold text-white">{OFFICIAL_BANK_TOTAL}</div>
+            <div className="mt-3 text-sm text-slate-400">local SAT question-bank snippets indexed</div>
           </Card>
         </div>
 
-        {/* ── Radar Chart + Subject Cards ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
-          {/* Radar Polygon Chart */}
-          <Card className="flex flex-col items-center justify-center p-6 bg-navy-800/80 backdrop-blur-sm">
-            <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4 self-start">Section Strength</h3>
-            <RadarChart data={radarData} size={380} />
+        <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+          <Card className="bg-navy-800/80">
+            <h3 className="mb-4 text-sm font-bold uppercase tracking-widest text-slate-500">Section balance</h3>
+            <RadarChart data={radarData} size={340} />
           </Card>
 
-          {/* Subject Mastery Cards */}
-          <div className="grid grid-cols-2 gap-4">
-            {(Object.entries(SUBJECT_CONFIG) as [McatSubject, { icon: string; gradient: string }][]).map(([key, cfg]) => {
-              const subjectProfile = profile.subjects[key];
-              const rank = subjectProfile.rank;
-              const rankColors = RANK_COLORS[rank.rank];
-              
+          <div className="grid grid-cols-1 gap-4">
+            {MCAT_SUBJECTS.map((subject) => {
+              const section = profile.subjects[subject];
+              const colors = RANK_COLORS[section.rank.rank];
               return (
-                <Card key={key} className="flex flex-col p-5 bg-gradient-to-b from-navy-800 to-navy-900/50 relative overflow-hidden">
-                  {/* Header */}
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xl">{cfg.icon}</span>
-                    <h3 className={`font-bold text-sm bg-gradient-to-r ${cfg.gradient} bg-clip-text text-transparent`}>
-                      {SUBJECT_LABELS[key]}
-                    </h3>
-                  </div>
-
-                  {/* Rank Badge */}
-                  <div className={`bg-gradient-to-r ${rankColors.gradient} ${rankColors.text} text-xs font-bold px-2.5 py-1 rounded-lg w-fit mb-3 tracking-wide flex items-center gap-1 ${rankColors.shadow}`}>
-                    <span className="text-sm">{rank.icon}</span> {rank.displayName}
-                  </div>
-
-                  {/* ELO */}
-                  <div className="text-2xl font-display font-bold text-white mb-2">{subjectProfile.elo}</div>
-
-                  {/* Progress to next tier */}
-                  {rank.eloToNextTier > 0 && (
-                    <div className="mt-auto pt-2">
-                       <div className="flex justify-between text-[10px] mb-1 font-medium pb-0.5">
-                        <span className="text-slate-400">{rank.eloFloor}</span>
-                        <span className="text-slate-400">{rank.eloCeiling}</span>
+                <Card key={subject} className="bg-navy-800/80">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className={`bg-gradient-to-r ${SECTION_CONFIG[subject].gradient} bg-clip-text text-lg font-bold text-transparent`}>
+                        {SUBJECT_LABELS[subject]}
                       </div>
-                      <div className="w-full bg-navy-900/90 rounded-full h-2 overflow-hidden border border-navy-700 relative">
-                        <div 
-                          className={`bg-gradient-to-r ${cfg.gradient} h-full rounded-full transition-all duration-1000 shadow-[0_0_8px_rgba(255,255,255,0.3)] relative overflow-hidden`}
-                          style={{ width: `${rank.progressInTier * 100}%` }} 
-                        >
-                          <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.2)_50%,transparent_75%)] bg-[length:0.5rem_0.5rem] animate-[shimmer_1s_linear_infinite]" />
-                        </div>
+                      <div className="mt-2 text-3xl font-display font-bold text-white">{section.elo}</div>
+                      <div className="mt-2 text-sm text-slate-400">
+                        Confidence {section.confidence.toFixed(1)} / 5 · {MCAT_CHAPTERS[subject].length} major domains
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-1.5 font-semibold text-center uppercase tracking-wider">{rank.eloToNextTier} to rank up</p>
                     </div>
-                  )}
+                    <div className={`rounded-full bg-gradient-to-r px-3 py-1 text-xs font-bold uppercase tracking-wider ${colors.gradient} ${colors.text}`}>
+                      {section.rank.displayName}
+                    </div>
+                  </div>
                 </Card>
               );
             })}
           </div>
         </div>
+
+        <Card className="bg-navy-800/80">
+          <h3 className="mb-5 text-sm font-bold uppercase tracking-widest text-slate-500">Domain priorities</h3>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {MCAT_SUBJECTS.map((subject) =>
+              Object.entries(profile.subjects[subject].topics)
+                .sort((a, b) => a[1].elo - b[1].elo)
+                .slice(0, 3)
+                .map(([topic, topicState]) => (
+                  <div key={`${subject}-${topic}`} className="rounded-xl border border-navy-700 bg-navy-900/60 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-bold text-white">{topic}</div>
+                        <div className="text-xs uppercase tracking-wider text-slate-500">{SUBJECT_LABELS[subject]}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-neon-blue">{topicState.elo} ELO</div>
+                        <div className="text-xs text-slate-500">Confidence {topicState.confidence.toFixed(1)}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+            )}
+          </div>
+        </Card>
       </main>
     </div>
   );

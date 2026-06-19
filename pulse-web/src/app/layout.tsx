@@ -19,8 +19,8 @@ const orbitron = Orbitron({
 });
 
 export const metadata: Metadata = {
-  title: "Spike MCAT Prep",
-  description: "UWorld's rigor meets Duolingo's engagement. Infinite, adaptive MCAT practice.",
+  title: "Spike SAT Prep",
+  description: "Adaptive SAT prep with official-bank grounding, domain confidence tracking, and section-aware planning.",
 };
 
 export default function RootLayout({

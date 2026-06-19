@@ -1,25 +1,34 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/prisma';
+import { getNextQuestionEligibleAt } from '@/lib/sat-tagging';
+import { getCurrentUser } from '@/lib/auth';
 
-// POST: Save session results — update ELO, XP, streak
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
     const body = await request.json();
     const {
-      subject,           // McatSubject string
-      eloChanges,        // Record<subject, { newElo: number, xpGained: number }>
-      totalXpGained,     // number
-      performances,      // Array<{ questionId, isCorrect, eloChange, timeTakenMs? }>
-    } = body;
+      subject,
+      eloChanges,
+      totalXpGained,
+      performances,
+    } = body as {
+      subject: string;
+      eloChanges: Record<string, { newElo: number; xpGained: number; confidence?: number }>;
+      totalXpGained: number;
+      performances: Array<{
+        questionId: string;
+        isCorrect: boolean;
+        eloChange: number;
+        topicName?: string;
+        subject?: string;
+      }>;
+    };
 
-    // 1. Update daily streak
     const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
     if (!dbUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -27,7 +36,7 @@ export async function POST(request: Request) {
 
     const today = new Date().toISOString().split('T')[0];
     let newStreak = dbUser.dailyStreak;
-    
+
     if (dbUser.lastPracticeDate) {
       const lastStr = dbUser.lastPracticeDate.toISOString().split('T')[0];
       const yesterday = new Date();
@@ -35,7 +44,7 @@ export async function POST(request: Request) {
       const yesterdayStr = yesterday.toISOString().split('T')[0];
 
       if (lastStr === today) {
-        // Already practiced today — keep streak
+        // same-day practice keeps streak
       } else if (lastStr === yesterdayStr) {
         newStreak += 1;
       } else {
@@ -45,7 +54,6 @@ export async function POST(request: Request) {
       newStreak = 1;
     }
 
-    // 2. Update user record
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -55,27 +63,101 @@ export async function POST(request: Request) {
       },
     });
 
-    // 3. Update subject stats (ELO + XP)
-    if (eloChanges) {
-      for (const [subj, change] of Object.entries(eloChanges) as [string, { newElo: number; xpGained: number }][]) {
-        await prisma.subjectStats.upsert({
-          where: { userId_subject: { userId: user.id, subject: subj } },
-          update: { elo: change.newElo, xp: { increment: change.xpGained } },
-          create: { userId: user.id, subject: subj, elo: change.newElo, xp: change.xpGained },
-        });
-      }
+    for (const [section, change] of Object.entries(eloChanges ?? {})) {
+      await prisma.subjectStats.upsert({
+        where: { userId_subject: { userId: user.id, subject: section } },
+        update: {
+          elo: change.newElo,
+          xp: { increment: change.xpGained },
+          ...(typeof change.confidence === 'number' ? { confidence: change.confidence } : {}),
+        },
+        create: {
+          userId: user.id,
+          subject: section,
+          elo: change.newElo,
+          xp: change.xpGained,
+          confidence: change.confidence ?? 3,
+        },
+      });
     }
 
-    // 4. Record individual performances (for practice history)
-    if (performances && Array.isArray(performances)) {
-      for (const perf of performances) {
-        await prisma.userPerformance.create({
-          data: {
+    for (const performance of performances ?? []) {
+      await prisma.userPerformance.create({
+        data: {
+          userId: user.id,
+          questionId: performance.questionId,
+          isCorrect: performance.isCorrect,
+          eloChange: performance.eloChange ?? 0,
+        },
+      });
+
+      const currentState = await prisma.userQuestionState.findUnique({
+        where: {
+          userId_questionId: {
             userId: user.id,
-            questionId: perf.questionId,
-            isCorrect: perf.isCorrect,
-            eloChange: perf.eloChange ?? 0,
-            timeTakenMs: perf.timeTakenMs ?? null,
+            questionId: performance.questionId,
+          },
+        },
+      });
+
+      const nextEligibleAt = getNextQuestionEligibleAt({
+        timesSeen: (currentState?.timesSeen ?? 0) + 1,
+        isCorrect: performance.isCorrect,
+      });
+
+      await prisma.userQuestionState.upsert({
+        where: {
+          userId_questionId: {
+            userId: user.id,
+            questionId: performance.questionId,
+          },
+        },
+        update: {
+          lastSeenAt: new Date(),
+          lastAnsweredAt: new Date(),
+          lastAnsweredCorrect: performance.isCorrect,
+          timesSeen: { increment: 1 },
+          timesAnswered: { increment: 1 },
+          timesCorrect: performance.isCorrect ? { increment: 1 } : undefined,
+          nextEligibleAt,
+          lastDifficultySeen: performance.eloChange ?? 0,
+        },
+        create: {
+          userId: user.id,
+          questionId: performance.questionId,
+          lastAnsweredAt: new Date(),
+          lastAnsweredCorrect: performance.isCorrect,
+          timesSeen: 1,
+          timesAnswered: 1,
+          timesCorrect: performance.isCorrect ? 1 : 0,
+          nextEligibleAt,
+          lastDifficultySeen: performance.eloChange ?? 0,
+        },
+      });
+
+      if (performance.topicName) {
+        await prisma.topicStats.upsert({
+          where: {
+            userId_subject_topicName: {
+              userId: user.id,
+              subject: performance.subject ?? subject,
+              topicName: performance.topicName,
+            },
+          },
+          update: {
+            elo: { increment: performance.eloChange ?? 0 },
+            xp: { increment: performance.isCorrect ? 12 : 4 },
+            confidence: {
+              increment: performance.isCorrect ? 0.05 : -0.05,
+            },
+          },
+          create: {
+            userId: user.id,
+            subject: performance.subject ?? subject,
+            topicName: performance.topicName,
+            elo: 1000 + (performance.eloChange ?? 0),
+            xp: performance.isCorrect ? 12 : 4,
+            confidence: performance.isCorrect ? 3.1 : 2.9,
           },
         });
       }
@@ -92,21 +174,18 @@ export async function POST(request: Request) {
   }
 }
 
-// GET: Load practice history
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    // Get recent performances grouped by time (sessions within 2 hours)
     const performances = await prisma.userPerformance.findMany({
       where: { userId: user.id },
       include: { question: true },
       orderBy: { createdAt: 'desc' },
-      take: 200, // last 200 question performances
+      take: 200,
     });
 
     return NextResponse.json({ performances });

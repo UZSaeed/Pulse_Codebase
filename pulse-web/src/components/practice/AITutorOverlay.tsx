@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MessageCircle, X, Send, Loader2, Minus } from 'lucide-react';
+import { MessageCircle, Send, Loader2, Minus } from 'lucide-react';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -12,7 +12,7 @@ interface AITutorOverlayProps {
   questionStem: string;
   explanation: string;
   passage?: string | null;
-  choices?: any;
+  choices?: unknown;
 }
 
 export function AITutorOverlay({ questionStem, explanation, passage, choices }: AITutorOverlayProps) {

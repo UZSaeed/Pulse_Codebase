@@ -19,8 +19,9 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ success: true, flag });
-  } catch (err: any) {
-    console.error('Failed to flag question:', err.message);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('Failed to flag question:', message);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

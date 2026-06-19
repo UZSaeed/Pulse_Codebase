@@ -1,22 +1,27 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import { type McatSubject, MCAT_SUBJECTS, DEFAULT_ELO, getTieredRank } from '@/lib/elo';
+import { type McatSubject, MCAT_SUBJECTS, getTieredRank } from '@/lib/elo';
 import {
   type UserProfile,
   type SessionResultInput,
   type ProcessedSessionResult,
   createDefaultProfile,
   processSessionResults,
+  getXpMultiplier,
 } from '@/lib/userProfile';
-
-// ─── Context Types ───────────────────────────────────────────────
+import { generateWeeklyPlan } from '@/lib/planner';
+import { MCAT_CHAPTERS } from '@/lib/chapters';
 
 interface UserProfileContextType {
   profile: UserProfile;
   loading: boolean;
   submitSession: (results: SessionResultInput[]) => ProcessedSessionResult;
-  persistSession: (processed: ProcessedSessionResult, subject: McatSubject, performances: { questionId: string; isCorrect: boolean; eloChange: number }[]) => Promise<void>;
+  persistSession: (
+    processed: ProcessedSessionResult,
+    subject: McatSubject,
+    performances: { questionId: string; isCorrect: boolean; eloChange: number; topicName?: string; subject?: string }[]
+  ) => Promise<void>;
   resetProfile: () => void;
   togglePlannerTask: (taskId: string) => void;
   addPlannerTask: (task: Omit<import('@/lib/planner').PlannerTask, 'id'>) => void;
@@ -25,65 +30,87 @@ interface UserProfileContextType {
 
 const UserProfileContext = createContext<UserProfileContextType | null>(null);
 
-// ─── Provider ────────────────────────────────────────────────────
-
 export function UserProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(() => createDefaultProfile());
   const [loading, setLoading] = useState(true);
 
-  // Load profile from DB on mount
   const loadProfile = useCallback(async () => {
     try {
-      const res = await fetch('/api/user/profile');
-      if (!res.ok) {
+      const response = await fetch('/api/user/profile');
+      if (!response.ok) {
         setLoading(false);
         return;
       }
-      const data = await res.json();
-      
-      setProfile(prev => {
-        const updated = { ...prev };
+
+      const data = await response.json();
+
+      setProfile((prev) => {
+        const updated = structuredClone(prev);
         updated.id = data.id;
         updated.name = data.name || 'Student';
         updated.dailyStreak = data.dailyStreak ?? 0;
         updated.lastPracticeDate = data.lastPracticeDate ?? null;
         updated.totalXp = data.totalXp ?? 0;
 
-        // Update subject ELO/XP from DB
-        if (data.subjectStats && Array.isArray(data.subjectStats)) {
+        if (Array.isArray(data.subjectStats)) {
           for (const stat of data.subjectStats) {
-            const subj = stat.subject as McatSubject;
-            if (updated.subjects[subj]) {
-              updated.subjects[subj].elo = stat.elo;
-              updated.subjects[subj].xp = stat.xp;
-              updated.subjects[subj].rank = getTieredRank(stat.elo);
+            const subject = stat.subject as McatSubject;
+            if (updated.subjects[subject]) {
+              updated.subjects[subject].elo = stat.elo;
+              updated.subjects[subject].xp = stat.xp;
+              updated.subjects[subject].confidence = stat.confidence ?? updated.subjects[subject].confidence;
+              updated.subjects[subject].rank = getTieredRank(stat.elo);
             }
           }
         }
 
-        // Recalculate overall ELO
-        const eloSum = MCAT_SUBJECTS.reduce((sum, s) => sum + updated.subjects[s].elo, 0);
-        updated.overallElo = Math.round(eloSum / MCAT_SUBJECTS.length);
-        updated.overallRank = getTieredRank(updated.overallElo);
-
-        // Update XP multiplier based on streak
-        const { getXpMultiplier } = require('@/lib/userProfile');
-        updated.xpMultiplier = getXpMultiplier(updated.dailyStreak);
-
-        // Update preferences from DB
-        if (data.preferences) {
-          updated.preferences = data.preferences;
+        if (Array.isArray(data.topicStats)) {
+          for (const stat of data.topicStats) {
+            const subject = stat.subject as McatSubject;
+            if (updated.subjects[subject]?.topics[stat.topicName]) {
+              updated.subjects[subject].topics[stat.topicName].elo = stat.elo;
+              updated.subjects[subject].topics[stat.topicName].xp = stat.xp;
+              updated.subjects[subject].topics[stat.topicName].confidence =
+                stat.confidence ?? updated.subjects[subject].topics[stat.topicName].confidence;
+            }
+          }
         }
 
-        // Regenerate planner tasks based on current date & preferences
-        const { generateWeeklyPlan } = require('@/lib/planner');
-        const todayStr = new Date().toISOString().split('T')[0];
-        updated.plannerTasks = generateWeeklyPlan(updated, todayStr);
+        updated.preferences = {
+          ...updated.preferences,
+          ...(data.preferences ?? {}),
+        };
 
+        if (data.preferences?.confidenceProfile) {
+          const confidenceProfile = data.preferences.confidenceProfile as Record<string, number>;
+          for (const subject of MCAT_SUBJECTS) {
+            for (const chapter of MCAT_CHAPTERS[subject]) {
+              const confidence = confidenceProfile[chapter.id];
+              if (typeof confidence !== 'number') continue;
+              for (const topic of chapter.topics) {
+                if (updated.subjects[subject].topics[topic]) {
+                  updated.subjects[subject].topics[topic].confidence = confidence;
+                  if (updated.subjects[subject].topics[topic].elo === 1000) {
+                    updated.subjects[subject].topics[topic].elo = 850 + confidence * 130;
+                  }
+                }
+              }
+            }
+            const topicValues = Object.values(updated.subjects[subject].topics);
+            updated.subjects[subject].confidence =
+              topicValues.reduce((sum, topic) => sum + topic.confidence, 0) / Math.max(1, topicValues.length);
+          }
+        }
+
+        updated.xpMultiplier = getXpMultiplier(updated.dailyStreak);
+        const eloSum = MCAT_SUBJECTS.reduce((sum, subject) => sum + updated.subjects[subject].elo, 0);
+        updated.overallElo = Math.round(eloSum / MCAT_SUBJECTS.length);
+        updated.overallRank = getTieredRank(updated.overallElo);
+        updated.plannerTasks = generateWeeklyPlan(updated, new Date().toISOString().split('T')[0]);
         return updated;
       });
-    } catch (err) {
-      console.error('Failed to load profile:', err);
+    } catch (error) {
+      console.error('Failed to load profile:', error);
     } finally {
       setLoading(false);
     }
@@ -93,55 +120,65 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     loadProfile();
   }, [loadProfile]);
 
-  const submitSession = useCallback((results: SessionResultInput[]): ProcessedSessionResult => {
-    const processed = processSessionResults(profile, results);
-    setProfile(processed.newProfile);
-    return processed;
-  }, [profile]);
+  const submitSession = useCallback(
+    (results: SessionResultInput[]): ProcessedSessionResult => {
+      const processed = processSessionResults(profile, results);
+      processed.newProfile.plannerTasks = generateWeeklyPlan(
+        processed.newProfile,
+        new Date().toISOString().split('T')[0]
+      );
+      setProfile(processed.newProfile);
+      return processed;
+    },
+    [profile]
+  );
 
-  // Persist session results to DB
-  const persistSession = useCallback(async (
-    processed: ProcessedSessionResult,
-    subject: McatSubject,
-    performances: { questionId: string; isCorrect: boolean; eloChange: number }[]
-  ) => {
-    try {
-      // Build per-subject ELO changes
-      const eloChanges: Record<string, { newElo: number; xpGained: number }> = {};
-      for (const s of MCAT_SUBJECTS) {
-        const newElo = processed.newProfile.subjects[s].elo;
-        eloChanges[s] = { newElo, xpGained: s === subject ? processed.xpGained : 0 };
+  const persistSession = useCallback(
+    async (
+      processed: ProcessedSessionResult,
+      subject: McatSubject,
+      performances: { questionId: string; isCorrect: boolean; eloChange: number; topicName?: string; subject?: string }[]
+    ) => {
+      try {
+        const eloChanges: Record<string, { newElo: number; xpGained: number; confidence?: number }> = {};
+        for (const section of MCAT_SUBJECTS) {
+          eloChanges[section] = {
+            newElo: processed.newProfile.subjects[section].elo,
+            xpGained: section === subject ? processed.xpGained : 0,
+            confidence: processed.newProfile.subjects[section].confidence,
+          };
+        }
+
+        await fetch('/api/user/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subject,
+            eloChanges,
+            totalXpGained: processed.xpGained,
+            performances,
+          }),
+        });
+      } catch (error) {
+        console.error('Failed to persist session:', error);
       }
-
-      await fetch('/api/user/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subject,
-          eloChanges,
-          totalXpGained: processed.xpGained,
-          performances,
-        }),
-      });
-    } catch (err) {
-      console.error('Failed to persist session:', err);
-    }
-  }, []);
+    },
+    []
+  );
 
   const resetProfile = useCallback(() => {
     setProfile(createDefaultProfile());
   }, []);
 
   const togglePlannerTask = useCallback((taskId: string) => {
-    setProfile((prev) => {
-      const newTasks = prev.plannerTasks.map((t) => {
-        if (t.id === taskId) {
-          return { ...t, status: (t.status === 'completed' ? 'pending' : 'completed') as 'pending' | 'completed' };
-        }
-        return t;
-      });
-      return { ...prev, plannerTasks: newTasks };
-    });
+    setProfile((prev) => ({
+      ...prev,
+      plannerTasks: prev.plannerTasks.map((task) =>
+        task.id === taskId
+          ? { ...task, status: task.status === 'completed' ? 'pending' : 'completed' }
+          : task
+      ),
+    }));
   }, []);
 
   const addPlannerTask = useCallback((taskData: Omit<import('@/lib/planner').PlannerTask, 'id'>) => {
@@ -150,12 +187,10 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         ...taskData,
         id: `manual-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       };
-      
-      const newTasks = [...prev.plannerTasks, newTask].sort((a, b) => {
-        return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
-      });
-      
-      return { ...prev, plannerTasks: newTasks };
+      return {
+        ...prev,
+        plannerTasks: [...prev.plannerTasks, newTask].sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate)),
+      };
     });
   }, []);
 
@@ -164,18 +199,27 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
   }, [loadProfile]);
 
   return (
-    <UserProfileContext.Provider value={{ profile, loading, submitSession, persistSession, resetProfile, togglePlannerTask, addPlannerTask, refreshProfile }}>
+    <UserProfileContext.Provider
+      value={{
+        profile,
+        loading,
+        submitSession,
+        persistSession,
+        resetProfile,
+        togglePlannerTask,
+        addPlannerTask,
+        refreshProfile,
+      }}
+    >
       {children}
     </UserProfileContext.Provider>
   );
 }
 
-// ─── Hook ────────────────────────────────────────────────────────
-
 export function useUserProfile(): UserProfileContextType {
-  const ctx = useContext(UserProfileContext);
-  if (!ctx) {
+  const context = useContext(UserProfileContext);
+  if (!context) {
     throw new Error('useUserProfile must be used within a UserProfileProvider');
   }
-  return ctx;
+  return context;
 }

@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import Lottie from 'lottie-react';
 import CountUp from 'react-countup';
 import { useConfetti } from '@/hooks/useConfetti';
-import type { TieredRankInfo, RankName } from '@/lib/elo';
+import type { TieredRankInfo } from '@/lib/elo';
 import { RANK_COLORS } from '@/lib/elo';
 
 // ─── Inline Lottie JSON: simple starburst celebration ────────────
@@ -80,15 +80,12 @@ export const LevelUpOverlay: React.FC<LevelUpOverlayProps> = ({
   onDismiss,
 }) => {
   const { fireConfetti } = useConfetti();
-  const [visible, setVisible] = useState(false);
 
   // Negative xpGained indicates a rank/level down
   const isNegative = xpGained < 0;
 
   useEffect(() => {
     if (show) {
-      setVisible(true);
-      
       let confettiTimer: NodeJS.Timeout | undefined;
       // Only fire confetti if it's a positive gain
       if (!isNegative) {
@@ -99,10 +96,7 @@ export const LevelUpOverlay: React.FC<LevelUpOverlayProps> = ({
       }
 
       // Auto-dismiss after 5 seconds
-      const dismissTimer = setTimeout(() => {
-        setVisible(false);
-        setTimeout(onDismiss, 500);
-      }, 5000);
+      const dismissTimer = setTimeout(onDismiss, 5000);
 
       return () => {
         if (confettiTimer) clearTimeout(confettiTimer);
@@ -111,7 +105,7 @@ export const LevelUpOverlay: React.FC<LevelUpOverlayProps> = ({
     }
   }, [show, fireConfetti, onDismiss, isNegative]);
 
-  if (!show && !visible) return null;
+  if (!show) return null;
 
   // Decide colors and title based on positive vs negative change
   const title = rankChanged 
@@ -131,8 +125,8 @@ export const LevelUpOverlay: React.FC<LevelUpOverlayProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-[100] flex items-center justify-center transition-all duration-500 ${visible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-      onClick={() => { setVisible(false); setTimeout(onDismiss, 500); }}
+      className="fixed inset-0 z-[100] flex items-center justify-center transition-all duration-500"
+      onClick={onDismiss}
     >
       {/* Backdrop */}
       <div className="absolute inset-0 bg-navy-900/90 backdrop-blur-lg" />

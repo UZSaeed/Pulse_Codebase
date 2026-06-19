@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { hasDevSessionRequestCookie } from '@/lib/auth-shared';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -13,7 +14,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({ request });
@@ -38,6 +39,7 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const hasDevSession = hasDevSessionRequestCookie(request);
 
   const { pathname } = request.nextUrl;
 
@@ -54,7 +56,7 @@ export async function updateSession(request: NextRequest) {
 
   // Root route: redirect based on auth state
   if (pathname === '/') {
-    if (user) {
+    if (user || hasDevSession) {
       const url = request.nextUrl.clone();
       url.pathname = '/dashboard';
       return NextResponse.redirect(url, { headers: supabaseResponse.headers });
@@ -66,7 +68,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Protected routes: redirect to login if not authenticated
-  if (!user) {
+  if (!user && !hasDevSession) {
     const url = request.nextUrl.clone();
     url.pathname = '/landing';
     return NextResponse.redirect(url, { headers: supabaseResponse.headers });

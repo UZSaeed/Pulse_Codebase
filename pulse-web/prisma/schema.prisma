@@ -21,6 +21,7 @@ model User {
   subjectStats     SubjectStats[]
   topicStats       TopicStats[]
   questionFlags    QuestionFlag[]
+  questionStates   UserQuestionState[]
   onboardingCompleted Boolean @default(false)
   preferences      UserPreference?
 }
@@ -28,9 +29,10 @@ model User {
 model SubjectStats {
   id        String   @id @default(uuid())
   userId    String
-  subject   String   // chem_phys, cars, bio_biochem, psych_soc
-  elo       Int      @default(1500)
+  subject   String   // reading_writing, math
+  elo       Int      @default(1000)
   xp        Int      @default(0)
+  confidence Float   @default(3)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, subject])
@@ -39,10 +41,11 @@ model SubjectStats {
 model TopicStats {
   id        String   @id @default(uuid())
   userId    String
-  subject   String   // chem_phys, cars, bio_biochem, psych_soc
+  subject   String   // reading_writing, math
   topicName String
-  elo       Int      @default(1500)
+  elo       Int      @default(1000)
   xp        Int      @default(0)
+  confidence Float   @default(3)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, subject, topicName])
@@ -51,15 +54,22 @@ model TopicStats {
 model Question {
   id            String   @id @default(uuid())
   subject       String
+  domain        String?
+  skill         String?
   topic         String?
   chapterId     String?
+  questionType  String?
+  answerFormat  String   @default("multiple_choice")
+  difficultyBand String?
+  difficultyTier String?
   passage       String?
   text          String   // This can act as the 'stem'
   choices       String?  // JSON string storing choices array
   correctAnswer String?  // e.g., 'A', 'B', 'C', 'D'
   explanation   String
   distractorExplanations String? // JSON string
-  baseDifficulty Int     @default(1500)
+  baseDifficulty Int     @default(1000)
+  tagsJson      Json?
   
   // Sourced Content Metadata
   imageUrls      String?  // JSON array of figure URLs (or imagePrompt for legacy)
@@ -70,12 +80,17 @@ model Question {
   requiresFigure Boolean  @default(false)
   referencedFigure String? // e.g., "Figure 1"
   generationType String   @default("hallucinated") // "sourced" | "discrete" | "hallucinated"
+  sourceKind     String   @default("generated") // generated | official_import | official_inspired | user_authored
+  sourceReferenceId String?
+  sourceReferencePdf String?
+  sourceReferencePage Int?
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   
   performances  UserPerformance[]
   flags         QuestionFlag[]
+  userStates    UserQuestionState[]
 }
 
 model UserPerformance {
@@ -93,6 +108,29 @@ model UserPerformance {
 
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   question       Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model UserQuestionState {
+  id                  String   @id @default(uuid())
+  userId              String
+  questionId          String
+  firstSeenAt         DateTime @default(now())
+  lastSeenAt          DateTime @default(now())
+  lastAnsweredAt      DateTime?
+  lastAnsweredCorrect Boolean?
+  timesSeen           Int      @default(0)
+  timesAnswered       Int      @default(0)
+  timesCorrect        Int      @default(0)
+  nextEligibleAt      DateTime?
+  lastDifficultySeen  Int?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@index([userId, nextEligibleAt])
 }
 
 model CalendarState {
@@ -122,17 +160,22 @@ model QuestionFlag {
 model UserPreference {
   id                         String   @id @default(uuid())
   userId                     String   @unique
-  testDate                   DateTime?
+  nextTestDate               DateTime?
+  preparedByDate             DateTime?
+  hasScheduledTest           Boolean  @default(false)
+  recentReadingWritingScore  Int?
+  recentMathScore            Int?
+  confidenceProfile          Json?
   
   // Phase splits (percentages adding up to 100)
-  rampUpPercentage           Int      @default(30)
-  grindPercentage            Int      @default(50)
+  rampUpPercentage           Int      @default(35)
+  grindPercentage            Int      @default(45)
   lastStretchPercentage      Int      @default(20)
 
   // Questions per day targets
-  rampUpQuestionsPerDay      Int      @default(30)
-  grindQuestionsPerDay       Int      @default(60)
-  lastStretchQuestionsPerDay Int      @default(90)
+  rampUpQuestionsPerDay      Int      @default(16)
+  grindQuestionsPerDay       Int      @default(24)
+  lastStretchQuestionsPerDay Int      @default(32)
 
   updatedAt                  DateTime @updatedAt
   user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)

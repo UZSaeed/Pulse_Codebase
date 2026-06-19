@@ -23,16 +23,16 @@ export async function POST(request: NextRequest) {
       questionStem: string;
       explanation: string;
       passage?: string | null;
-      choices?: any;
+      choices?: unknown;
       userMessage: string;
       tokensUsedThisMonth?: number;
       monthlyTokenBudget?: number;
     };
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'OPENAI_API_KEY not configured' },
+        { error: 'No LLM API key configured' },
         { status: 500 }
       );
     }
