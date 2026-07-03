@@ -42,14 +42,26 @@ export async function getCurrentUser(): Promise<AppUser | null> {
   const devSession = cookieStore.get(DEV_SESSION_COOKIE)?.value;
 
   if (isDevLoginEnabled() && devSession === '1') {
-    const user = await ensureDevUser();
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      image: user.image,
-      isTemp: true,
-    };
+    try {
+      const user = await ensureDevUser();
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        image: user.image,
+        isTemp: true,
+      };
+    } catch (error) {
+      // Dev-only: keep the app usable when the database is unreachable.
+      console.warn('[auth] DB unavailable for dev session, using static dev user:', error);
+      return {
+        id: DEV_USER_ID,
+        email: DEV_USER_EMAIL,
+        name: DEV_USER_NAME,
+        image: null,
+        isTemp: true,
+      };
+    }
   }
 
   const supabase = await createClient();

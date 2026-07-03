@@ -16,6 +16,7 @@ export async function GET() {
         subjectStats: true,
         topicStats: true,
         preferences: true,
+        practiceTests: { orderBy: { takenAt: 'desc' }, take: 10 },
       },
     });
 
@@ -41,6 +42,13 @@ export async function GET() {
         elo: topic.elo,
         xp: topic.xp,
         confidence: topic.confidence,
+      })),
+      practiceTests: dbUser.practiceTests.map((test) => ({
+        id: test.id,
+        takenAt: test.takenAt.toISOString(),
+        readingWritingScore: test.readingWritingScore,
+        mathScore: test.mathScore,
+        domainBreakdown: test.domainBreakdown,
       })),
       preferences: dbUser.preferences ? {
         nextTestDate: dbUser.preferences.nextTestDate?.toISOString() ?? null,

@@ -24,6 +24,7 @@ model User {
   questionStates   UserQuestionState[]
   onboardingCompleted Boolean @default(false)
   preferences      UserPreference?
+  practiceTests    PracticeTestResult[]
 }
 
 model SubjectStats {
@@ -79,7 +80,10 @@ model Question {
   sourceLicense  String?  // OA license
   requiresFigure Boolean  @default(false)
   referencedFigure String? // e.g., "Figure 1"
-  generationType String   @default("hallucinated") // "sourced" | "discrete" | "hallucinated"
+  graphSpec      Json?    // function-plot spec rendered client-side by MathGraph
+  templateId     String?  // math template that produced this question
+  templateSeed   Int?     // RNG seed for deterministic reproduction
+  generationType String   @default("hallucinated") // "sourced" | "discrete" | "hallucinated" | "template"
   sourceKind     String   @default("generated") // generated | official_import | official_inspired | user_authored
   sourceReferenceId String?
   sourceReferencePdf String?
@@ -179,6 +183,21 @@ model UserPreference {
 
   updatedAt                  DateTime @updatedAt
   user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PracticeTestResult {
+  id                  String   @id @default(uuid())
+  userId              String
+  takenAt             DateTime @default(now())
+  readingWritingScore Int      // section score, 200-800
+  mathScore           Int      // section score, 200-800
+  domainBreakdown     Json?    // { [chapterId]: { correct: number, total: number } }
+  notes               String?
+  createdAt           DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, takenAt])
 }
 
 model Waitlist {

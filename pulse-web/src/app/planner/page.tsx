@@ -82,6 +82,7 @@ export default function PlannerPage() {
                       key={task.id}
                       onClick={() => {
                         if (task.subject === 'custom') togglePlannerTask(task.id);
+                        else if (task.type === 'practice_test') router.push('/practice-tests');
                         else router.push(`/practice?taskId=${task.id}`);
                       }}
                       className={`w-full rounded-xl border p-4 text-left transition-all ${

@@ -81,6 +81,8 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
           ...(data.preferences ?? {}),
         };
 
+        updated.practiceTests = Array.isArray(data.practiceTests) ? data.practiceTests : [];
+
         if (data.preferences?.confidenceProfile) {
           const confidenceProfile = data.preferences.confidenceProfile as Record<string, number>;
           for (const subject of MCAT_SUBJECTS) {

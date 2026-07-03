@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { AITutorOverlay } from '@/components/practice/AITutorOverlay';
+import { MathGraph } from '@/components/practice/MathGraph';
 import { LevelUpOverlay } from '@/components/ui/LevelUpOverlay';
 import { useUserProfile } from '@/context/UserProfileContext';
 import { MCAT_CHAPTERS } from '@/lib/chapters';
@@ -219,6 +220,8 @@ function PracticePageInner() {
                 <p className="whitespace-pre-line text-slate-200">{currentQuestion.passage}</p>
               </Card>
             )}
+
+            {currentQuestion.graphSpec && <MathGraph spec={currentQuestion.graphSpec} />}
 
             <Card className="bg-navy-800/80">
               <h2 className="text-xl font-semibold text-white">{currentQuestion.stem}</h2>

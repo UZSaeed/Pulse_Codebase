@@ -1,5 +1,6 @@
 import { type McatSubject, SUBJECT_LABELS, getDifficultyLabelForElo } from './elo';
 import { getOfficialKnowledgeContext } from './sat-question-bank';
+import type { GraphSpec } from './math-templates';
 
 export interface GeneratedQuestion {
   id?: string;
@@ -10,6 +11,7 @@ export interface GeneratedQuestion {
   explanation: string;
   distractorExplanations: Record<string, string>;
   imageUrls?: string[] | null;
+  graphSpec?: GraphSpec | null;
   sourcePmcId?: string | null;
   subject: McatSubject;
   topic: string;

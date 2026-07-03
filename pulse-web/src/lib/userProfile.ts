@@ -28,6 +28,15 @@ export interface SubjectProfile {
   topics: Record<string, DomainProfile>;
 }
 
+export interface PracticeTestSummary {
+  id?: string;
+  takenAt: string;
+  readingWritingScore: number;
+  mathScore: number;
+  /** Keyed by chapterId (e.g. "math-algebra") → raw section-breakdown counts. */
+  domainBreakdown?: Record<string, { correct: number; total: number }> | null;
+}
+
 export interface UserPreferences {
   nextTestDate: string | null;
   preparedByDate: string | null;
@@ -54,6 +63,8 @@ export interface UserProfile {
   xpMultiplier: number;
   plannerTasks: import('./planner').PlannerTask[];
   preferences: UserPreferences;
+  /** Most recent first. Logged from full-length practice tests. */
+  practiceTests: PracticeTestSummary[];
 }
 
 export interface SessionResultInput {
@@ -125,6 +136,7 @@ export function createDefaultProfile(id: string = 'local', name: string = 'Stude
     lastPracticeDate: null,
     xpMultiplier: 1,
     plannerTasks: [],
+    practiceTests: [],
     preferences: {
       nextTestDate: null,
       preparedByDate: new Date(Date.now() + 84 * 24 * 60 * 60 * 1000).toISOString(),

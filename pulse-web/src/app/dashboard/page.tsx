@@ -1,23 +1,24 @@
 'use client';
 
 import Link from 'next/link';
+import { useMemo } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { RadarChart } from '@/components/ui/RadarChart';
+import { DomainRadar } from '@/components/ui/DomainRadar';
 import { useUserProfile } from '@/context/UserProfileContext';
 import { MCAT_SUBJECTS, SUBJECT_LABELS, RANK_COLORS, type McatSubject } from '@/lib/elo';
-import { MCAT_CHAPTERS } from '@/lib/chapters';
+import { computeDomainStates, GOLD_TARGET_ELO } from '@/lib/planner';
 
-const SECTION_CONFIG: Record<McatSubject, { icon: string; gradient: string }> = {
-  reading_writing: { icon: 'R', gradient: 'from-cyan-400 to-blue-500' },
-  math: { icon: 'M', gradient: 'from-emerald-400 to-lime-500' },
+const SECTION_DISPLAY: Record<McatSubject, string> = {
+  reading_writing: 'English',
+  math: 'Math',
 };
-
-const OFFICIAL_BANK_TOTAL = 1184;
 
 export default function DashboardPage() {
   const { profile, loading } = useUserProfile();
+
+  const domainStates = useMemo(() => computeDomainStates(profile), [profile]);
 
   if (loading) {
     return (
@@ -34,13 +35,8 @@ export default function DashboardPage() {
   }
 
   const nextTask = profile.plannerTasks.find((task) => task.status === 'pending');
-  const radarData = MCAT_SUBJECTS.map((subject) => ({
-    subject,
-    label: SUBJECT_LABELS[subject],
-    icon: SECTION_CONFIG[subject].icon,
-    value: profile.subjects[subject].elo,
-    max: 2000,
-  }));
+  const goldDomains = domainStates.filter((state) => state.elo >= GOLD_TARGET_ELO).length;
+  const overallColors = RANK_COLORS[profile.overallRank.rank];
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -52,8 +48,8 @@ export default function DashboardPage() {
               SAT dashboard for {profile.name}
             </h1>
             <p className="max-w-2xl font-medium text-slate-400">
-              Your plan prioritizes weaker SAT domains first, then rotates reinforcement as your section ELO and
-              confidence improve.
+              The goal: Gold rank — hard-difficulty questions — in every domain before test day. {goldDomains}/
+              {domainStates.length} domains are there now.
             </p>
           </div>
           <div className="flex gap-3">
@@ -79,20 +75,62 @@ export default function DashboardPage() {
                   {nextTask.targetTopics?.join(', ') || 'Mixed practice'}
                 </p>
               </div>
-              <Link href="/practice">
+              <Link href={nextTask.type === 'practice_test' ? '/practice-tests' : '/practice'}>
                 <Button variant="primary" neon>
-                  Launch block
+                  {nextTask.type === 'practice_test' ? 'Log practice test' : 'Launch block'}
                 </Button>
               </Link>
             </div>
           </Card>
         )}
 
+        {/* Domain strength: ranks above, toggleable node graph below */}
+        <Card className="mb-8 bg-navy-800/80">
+          <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-navy-700 bg-navy-900/60 p-5 text-center">
+              <div className="text-xs font-bold uppercase tracking-widest text-slate-500">Overall rank</div>
+              <div
+                className={`mx-auto mt-3 inline-block rounded-full bg-gradient-to-r px-4 py-1.5 text-sm font-black uppercase tracking-wider ${overallColors.gradient} ${overallColors.text}`}
+              >
+                {profile.overallRank.displayName}
+              </div>
+              <div className="mt-3 text-3xl font-display font-bold text-neon-blue">{profile.overallElo}</div>
+              <div className="mt-1 text-xs text-slate-500">ELO · serves {profile.overallRank.difficultyLabel} questions</div>
+            </div>
+
+            {MCAT_SUBJECTS.map((subject) => {
+              const sectionProfile = profile.subjects[subject];
+              const colors = RANK_COLORS[sectionProfile.rank.rank];
+              return (
+                <div key={subject} className="rounded-2xl border border-navy-700 bg-navy-900/60 p-5 text-center">
+                  <div className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                    {SECTION_DISPLAY[subject]} rank
+                  </div>
+                  <div
+                    className={`mx-auto mt-3 inline-block rounded-full bg-gradient-to-r px-4 py-1.5 text-sm font-black uppercase tracking-wider ${colors.gradient} ${colors.text}`}
+                  >
+                    {sectionProfile.rank.displayName}
+                  </div>
+                  <div className="mt-3 text-3xl font-display font-bold text-white">{sectionProfile.elo}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    ELO · {SUBJECT_LABELS[subject]}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <DomainRadar states={domainStates} size={400} />
+        </Card>
+
         <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-4">
           <Card className="bg-navy-800/80">
-            <div className="text-sm font-semibold uppercase tracking-wider text-slate-400">Overall ELO</div>
-            <div className="mt-3 text-5xl font-display font-bold text-neon-blue">{profile.overallElo}</div>
-            <div className="mt-3 text-sm text-slate-400">{profile.overallRank.displayName} adaptive band</div>
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-400">Domains at Gold</div>
+            <div className="mt-3 text-5xl font-display font-bold text-yellow-300">
+              {goldDomains}
+              <span className="text-2xl text-slate-500">/{domainStates.length}</span>
+            </div>
+            <div className="mt-3 text-sm text-slate-400">Gold = ready for hard questions</div>
           </Card>
           <Card className="bg-navy-800/80">
             <div className="text-sm font-semibold uppercase tracking-wider text-slate-400">Daily streak</div>
@@ -100,7 +138,7 @@ export default function DashboardPage() {
             <div className="mt-3 text-sm text-slate-400">{profile.xpMultiplier.toFixed(2)}x XP multiplier</div>
           </Card>
           <Card className="bg-navy-800/80">
-            <div className="text-sm font-semibold uppercase tracking-wider text-slate-400">Latest scores</div>
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-400">Latest test scores</div>
             <div className="mt-3 text-lg font-semibold text-white">
               RW {profile.preferences.recentReadingWritingScore ?? '—'}
             </div>
@@ -109,66 +147,55 @@ export default function DashboardPage() {
             </div>
           </Card>
           <Card className="bg-navy-800/80">
-            <div className="text-sm font-semibold uppercase tracking-wider text-slate-400">Official bank</div>
-            <div className="mt-3 text-5xl font-display font-bold text-white">{OFFICIAL_BANK_TOTAL}</div>
-            <div className="mt-3 text-sm text-slate-400">local SAT question-bank snippets indexed</div>
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-400">Practice tests logged</div>
+            <div className="mt-3 text-5xl font-display font-bold text-white">{profile.practiceTests.length}</div>
+            <div className="mt-3 text-sm text-slate-400">
+              <Link href="/practice-tests" className="text-neon-blue hover:underline">
+                Log a test →
+              </Link>
+            </div>
           </Card>
-        </div>
-
-        <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
-          <Card className="bg-navy-800/80">
-            <h3 className="mb-4 text-sm font-bold uppercase tracking-widest text-slate-500">Section balance</h3>
-            <RadarChart data={radarData} size={340} />
-          </Card>
-
-          <div className="grid grid-cols-1 gap-4">
-            {MCAT_SUBJECTS.map((subject) => {
-              const section = profile.subjects[subject];
-              const colors = RANK_COLORS[section.rank.rank];
-              return (
-                <Card key={subject} className="bg-navy-800/80">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className={`bg-gradient-to-r ${SECTION_CONFIG[subject].gradient} bg-clip-text text-lg font-bold text-transparent`}>
-                        {SUBJECT_LABELS[subject]}
-                      </div>
-                      <div className="mt-2 text-3xl font-display font-bold text-white">{section.elo}</div>
-                      <div className="mt-2 text-sm text-slate-400">
-                        Confidence {section.confidence.toFixed(1)} / 5 · {MCAT_CHAPTERS[subject].length} major domains
-                      </div>
-                    </div>
-                    <div className={`rounded-full bg-gradient-to-r px-3 py-1 text-xs font-bold uppercase tracking-wider ${colors.gradient} ${colors.text}`}>
-                      {section.rank.displayName}
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
         </div>
 
         <Card className="bg-navy-800/80">
-          <h3 className="mb-5 text-sm font-bold uppercase tracking-widest text-slate-500">Domain priorities</h3>
+          <h3 className="mb-5 text-sm font-bold uppercase tracking-widest text-slate-500">
+            Road to Gold — domain priorities
+          </h3>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {MCAT_SUBJECTS.map((subject) =>
-              Object.entries(profile.subjects[subject].topics)
-                .sort((a, b) => a[1].elo - b[1].elo)
-                .slice(0, 3)
-                .map(([topic, topicState]) => (
-                  <div key={`${subject}-${topic}`} className="rounded-xl border border-navy-700 bg-navy-900/60 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-bold text-white">{topic}</div>
-                        <div className="text-xs uppercase tracking-wider text-slate-500">{SUBJECT_LABELS[subject]}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-neon-blue">{topicState.elo} ELO</div>
-                        <div className="text-xs text-slate-500">Confidence {topicState.confidence.toFixed(1)}</div>
+            {domainStates.slice(0, 6).map((state) => {
+              const colors = RANK_COLORS[state.rank.rank];
+              return (
+                <div key={state.chapterId} className="rounded-xl border border-navy-700 bg-navy-900/60 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-bold text-white">{state.domain}</div>
+                      <div className="text-xs uppercase tracking-wider text-slate-500">
+                        {SECTION_DISPLAY[state.subject]}
                       </div>
                     </div>
+                    <div className="text-right">
+                      <div
+                        className={`inline-block rounded-full bg-gradient-to-r px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${colors.gradient} ${colors.text}`}
+                      >
+                        {state.rank.displayName}
+                      </div>
+                      <div className="mt-1 text-sm font-bold text-neon-blue">{state.elo} ELO</div>
+                    </div>
                   </div>
-                ))
-            )}
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-navy-700">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-amber-600 via-slate-300 to-yellow-300"
+                      style={{ width: `${Math.min(100, Math.max(4, ((state.elo - 700) / (GOLD_TARGET_ELO - 700)) * 100))}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500">
+                    {state.gapToGold > 0
+                      ? `${state.gapToGold} ELO to Gold · ~${state.questionsToGold} questions`
+                      : 'Gold reached — maintaining'}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </Card>
       </main>
