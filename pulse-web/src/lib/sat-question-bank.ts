@@ -7,13 +7,16 @@ export interface OfficialSatSnippet {
   section: McatSubject;
   domain: string;
   difficulty: 'easy' | 'medium' | 'hard';
-  sourcePdf: string;
-  pageNumber: number;
+  sourcePdf?: string;
+  pageNumber?: number;
   sourceId: string;
+  skill?: string;
   prompt: string;
   choices: { label: string; text: string }[];
-  usableAsPractice: boolean;
-  rawChoiceCount: number;
+  correctAnswer?: string;
+  rationale?: string;
+  usableAsPractice?: boolean;
+  rawChoiceCount?: number;
 }
 
 export interface PracticeQuestion {

@@ -37,10 +37,10 @@ export const RANK_ICONS: Record<RankName, string> = {
   Gold: 'G',
 };
 
-export const RANK_COLORS: Record<RankName, { gradient: string; text: string; shadow: string }> = {
-  Bronze: { gradient: 'from-amber-700 to-orange-500', text: 'text-amber-100', shadow: 'shadow-amber-700/50' },
-  Silver: { gradient: 'from-slate-300 to-slate-500', text: 'text-slate-900', shadow: 'shadow-slate-300/60' },
-  Gold: { gradient: 'from-yellow-300 to-amber-400', text: 'text-slate-900', shadow: 'shadow-yellow-300/60' },
+export const RANK_COLORS: Record<RankName, { gradient: string; text: string; shadow: string; bg: string }> = {
+  Bronze: { gradient: 'from-amber-500 to-orange-400', text: 'text-white', shadow: 'shadow-amber-300/40', bg: 'bg-amber-50' },
+  Silver: { gradient: 'from-slate-400 to-slate-500', text: 'text-white', shadow: 'shadow-slate-300/40', bg: 'bg-slate-50' },
+  Gold: { gradient: 'from-yellow-400 to-amber-400', text: 'text-white', shadow: 'shadow-yellow-300/40', bg: 'bg-yellow-50' },
 };
 
 /**
@@ -137,6 +137,11 @@ export interface EloUpdateResult {
   eloChange: number;
   rank: RankName;
   tieredRank: TieredRankInfo;
+}
+
+export function satScoreToElo(satScore: number): number {
+  const clamped = Math.max(200, Math.min(800, satScore));
+  return Math.round(600 + ((clamped - 200) / 600) * 1200);
 }
 
 export function calculateElo(

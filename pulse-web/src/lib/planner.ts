@@ -170,10 +170,16 @@ function buildPlanningWindow(profile: UserProfile, today: Date): PlanningWindow 
   return { targetDate, totalDays, daysToExam, phaseName };
 }
 
-function getDailyQuestionTarget(profile: UserProfile, phaseName: string): number {
-  if (phaseName === 'Build') return profile.preferences.rampUpQuestionsPerDay;
-  if (phaseName === 'Push') return profile.preferences.grindQuestionsPerDay;
-  return profile.preferences.lastStretchQuestionsPerDay;
+function getDailyQuestionTarget(profile: UserProfile, phaseName: string, daysToExam: number): number {
+  const domainStates = computeDomainStates(profile, null, daysToExam);
+  const totalQuestionsNeeded = domainStates.reduce((sum, d) => sum + d.questionsToGold, 0);
+
+  const autoDaily = Math.ceil(totalQuestionsNeeded / Math.max(1, daysToExam));
+
+  const phaseMultiplier = phaseName === 'Build' ? 0.8 : phaseName === 'Push' ? 1.0 : 1.2;
+  const smartDaily = Math.round(autoDaily * phaseMultiplier);
+
+  return Math.max(8, Math.min(50, smartDaily));
 }
 
 /** Weakest topics inside a domain — what the daily block should target. */
@@ -202,7 +208,7 @@ export function getPracticeTestDates(examDate: Date, from: Date): string[] {
 export function generateWeeklyPlan(profile: UserProfile, startDateStr: string): PlannerTask[] {
   const start = normalizeDate(new Date(startDateStr));
   const { targetDate, daysToExam, phaseName } = buildPlanningWindow(profile, start);
-  const baseQuestions = getDailyQuestionTarget(profile, phaseName);
+  const baseQuestions = getDailyQuestionTarget(profile, phaseName, daysToExam);
 
   const domainStates = computeDomainStates(profile, profile.practiceTests?.[0] ?? null, daysToExam);
 

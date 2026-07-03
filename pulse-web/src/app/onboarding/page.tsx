@@ -40,7 +40,7 @@ export default function OnboardingPage() {
 
   const targetDateLabel = useMemo(() => {
     const raw = hasScheduledTest ? nextTestDate : preparedByDate;
-    if (!raw) return 'We will default to a 12-week plan.';
+    if (!raw) return "We'll default to a 12-week plan.";
     return new Date(raw).toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'long',
@@ -73,32 +73,29 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-800 to-navy-900 p-6 text-slate-200">
+    <div className="min-h-screen bg-slate-50 p-6 text-slate-800">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl items-center justify-center">
-        <Card className="w-full bg-navy-800/90 p-8 backdrop-blur-xl">
+        <Card className="w-full bg-white p-8">
           {step === 0 && (
             <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="flex flex-col justify-center">
-                <div className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-neon-blue">Spike SAT Prep</div>
-                <h1 className="mb-4 text-5xl font-display font-bold text-white">Let&apos;s build your SAT game plan.</h1>
-                <p className="max-w-xl text-lg leading-relaxed text-slate-400">
-                  We&apos;ll use your goals, recent scores, and domain confidence to prioritize the weakest skills first and
-                  automatically shape your day-by-day practice schedule.
+                <div className="mb-4 text-xs font-bold uppercase tracking-wider text-cyan-600">SpikePrep</div>
+                <h1 className="mb-4 text-4xl font-black text-slate-900 md:text-5xl">Let&apos;s build your study plan.</h1>
+                <p className="max-w-xl text-lg leading-relaxed text-slate-500">
+                  Tell Spike about your goals and where you feel strong or need help. We&apos;ll create a personalized plan that focuses on your weak spots first.
                 </p>
                 <div className="mt-8 flex gap-3">
-                  <Button variant="primary" neon size="lg" onClick={() => setStep(1)}>
-                    Start setup
+                  <Button variant="primary" size="lg" onClick={() => setStep(1)}>
+                    Let&apos;s go!
                   </Button>
                 </div>
               </div>
-              <div className="rounded-3xl border border-neon-blue/20 bg-neon-blue/5 p-6">
-                <div className="mb-4 text-sm font-bold uppercase tracking-widest text-neon-blue">What changes in the SAT version</div>
-                <ul className="space-y-4 text-sm text-slate-300">
-                  <li>Reading & Writing and Math are tracked independently, with domain-level confidence and ELO.</li>
-                  <li>Bronze, Silver, and Gold tiers control easy, medium, and hard practice automatically.</li>
-                  <li>Official SAT question-bank PDFs seed the app&apos;s local knowledge layer for generation and retrieval.</li>
-                  <li>Your planner rotates from weakest domains to stronger ones as you improve instead of splitting time evenly.</li>
-                </ul>
+              <div className="flex flex-col items-center justify-center rounded-3xl bg-cyan-50 p-8">
+                <img src="/spike-mascot.png" alt="Spike" className="h-40 w-40 object-contain mb-6" />
+                <div className="text-center">
+                  <div className="font-black text-slate-800 text-lg">Hi, I&apos;m Spike!</div>
+                  <p className="mt-2 text-sm text-slate-600">I&apos;ll help you figure out the best way to prep. Let&apos;s get started!</p>
+                </div>
               </div>
             </div>
           )}
@@ -106,57 +103,57 @@ export default function OnboardingPage() {
           {step === 1 && (
             <div className="space-y-8">
               <div className="text-center">
-                <h2 className="text-3xl font-display font-bold text-white">Target date and recent scores</h2>
-                <p className="mt-2 text-slate-400">Tell us when you&apos;re aiming to be ready and what your latest SAT breakdown looks like.</p>
+                <h2 className="text-3xl font-black text-slate-900">When&apos;s your test?</h2>
+                <p className="mt-2 text-slate-500">And what were your last scores, if you have them?</p>
               </div>
 
               <div className="grid gap-6 md:grid-cols-2">
-                <Card className="bg-navy-900/60">
-                  <div className="mb-4 text-sm font-bold uppercase tracking-widest text-slate-400">Timing</div>
+                <Card className="bg-slate-50">
+                  <div className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-400">Timing</div>
                   <div className="mb-4 flex gap-3">
                     <button
                       onClick={() => setHasScheduledTest(true)}
-                      className={`rounded-xl border px-4 py-3 text-sm font-bold ${hasScheduledTest ? 'border-neon-blue bg-neon-blue/10 text-neon-blue' : 'border-navy-700 text-slate-400'}`}
+                      className={`rounded-2xl border-2 px-4 py-3 text-sm font-bold ${hasScheduledTest ? 'border-cyan-600 bg-cyan-50 text-cyan-600' : 'border-slate-200 text-slate-400'}`}
                     >
                       I have a test date
                     </button>
                     <button
                       onClick={() => setHasScheduledTest(false)}
-                      className={`rounded-xl border px-4 py-3 text-sm font-bold ${!hasScheduledTest ? 'border-neon-blue bg-neon-blue/10 text-neon-blue' : 'border-navy-700 text-slate-400'}`}
+                      className={`rounded-2xl border-2 px-4 py-3 text-sm font-bold ${!hasScheduledTest ? 'border-cyan-600 bg-cyan-50 text-cyan-600' : 'border-slate-200 text-slate-400'}`}
                     >
-                      I just want to be ready
+                      Just want to be ready
                     </button>
                   </div>
                   <input
                     type="date"
                     value={hasScheduledTest ? nextTestDate : preparedByDate}
                     onChange={(event) => (hasScheduledTest ? setNextTestDate(event.target.value) : setPreparedByDate(event.target.value))}
-                    className="w-full rounded-xl border border-navy-700 bg-navy-800 px-4 py-3 text-white outline-none focus:border-neon-blue/50"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-800 outline-none focus:border-cyan-600"
                   />
-                  <p className="mt-3 text-sm text-slate-500">{targetDateLabel}</p>
+                  <p className="mt-3 text-sm text-slate-400">{targetDateLabel}</p>
                 </Card>
 
-                <Card className="bg-navy-900/60">
-                  <div className="mb-4 text-sm font-bold uppercase tracking-widest text-slate-400">Recent SAT performance</div>
+                <Card className="bg-slate-50">
+                  <div className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-400">Recent SAT scores</div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-500">Reading & Writing</label>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-400">Reading & Writing</label>
                       <input
                         inputMode="numeric"
                         placeholder="e.g. 610"
                         value={recentReadingWritingScore}
                         onChange={(event) => setRecentReadingWritingScore(event.target.value)}
-                        className="w-full rounded-xl border border-navy-700 bg-navy-800 px-4 py-3 text-white outline-none focus:border-neon-blue/50"
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-800 outline-none focus:border-cyan-600"
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-500">Math</label>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-400">Math</label>
                       <input
                         inputMode="numeric"
                         placeholder="e.g. 570"
                         value={recentMathScore}
                         onChange={(event) => setRecentMathScore(event.target.value)}
-                        className="w-full rounded-xl border border-navy-700 bg-navy-800 px-4 py-3 text-white outline-none focus:border-neon-blue/50"
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-800 outline-none focus:border-cyan-600"
                       />
                     </div>
                   </div>
@@ -167,7 +164,7 @@ export default function OnboardingPage() {
                 <Button variant="ghost" onClick={() => setStep(0)}>
                   Back
                 </Button>
-                <Button variant="primary" neon onClick={() => setStep(2)}>
+                <Button variant="primary" onClick={() => setStep(2)}>
                   Next
                 </Button>
               </div>
@@ -177,20 +174,26 @@ export default function OnboardingPage() {
           {step === 2 && (
             <div className="space-y-8">
               <div className="text-center">
-                <h2 className="text-3xl font-display font-bold text-white">Confidence by SAT domain</h2>
-                <p className="mt-2 text-slate-400">
-                  Rate how confident you feel right now. We&apos;ll combine this with your scores to seed the first adaptive plan.
+                <h2 className="text-3xl font-black text-slate-900">How confident do you feel?</h2>
+                <p className="mt-2 text-slate-500">
+                  Rate each area so Spike knows where to focus your practice.
                 </p>
               </div>
+
+              {(recentReadingWritingScore || recentMathScore) && (
+                <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-4 text-sm text-cyan-800">
+                  Since you entered your SAT scores, we&apos;ll use those for your starting level. These confidence ratings help Spike prioritize which domains to focus on first.
+                </div>
+              )}
 
               <div className="grid gap-5 md:grid-cols-2">
                 {Object.entries(MCAT_CHAPTERS).map(([subject, chapters]) =>
                   chapters.map((chapter) => (
-                    <Card key={chapter.id} className="bg-navy-900/60">
-                      <div className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                    <Card key={chapter.id} className="bg-slate-50">
+                      <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
                         {subject === 'reading_writing' ? 'Reading & Writing' : 'Math'}
                       </div>
-                      <h3 className="text-lg font-bold text-white">{chapter.name}</h3>
+                      <h3 className="text-lg font-bold text-slate-800">{chapter.name}</h3>
                       <p className="mt-2 text-sm text-slate-400">{chapter.topics.slice(0, 3).join(', ')}{chapter.topics.length > 3 ? ', ...' : ''}</p>
                       <div className="mt-5 flex items-center gap-4">
                         <input
@@ -201,9 +204,9 @@ export default function OnboardingPage() {
                           onChange={(event) =>
                             setConfidenceProfile((prev) => ({ ...prev, [chapter.id]: Number(event.target.value) }))
                           }
-                          className="w-full accent-cyan-400"
+                          className="w-full accent-cyan-600"
                         />
-                        <div className="w-12 text-right text-lg font-bold text-neon-blue">{confidenceProfile[chapter.id]}</div>
+                        <div className="w-12 text-right text-lg font-bold text-cyan-600">{confidenceProfile[chapter.id]}</div>
                       </div>
                     </Card>
                   ))
@@ -214,7 +217,7 @@ export default function OnboardingPage() {
                 <Button variant="ghost" onClick={() => setStep(1)}>
                   Back
                 </Button>
-                <Button variant="primary" neon onClick={() => setStep(3)}>
+                <Button variant="primary" onClick={() => setStep(3)}>
                   Next
                 </Button>
               </div>
@@ -224,18 +227,18 @@ export default function OnboardingPage() {
           {step === 3 && (
             <div className="space-y-8">
               <div className="text-center">
-                <h2 className="text-3xl font-display font-bold text-white">Schedule intensity</h2>
-                <p className="mt-2 text-slate-400">Set how your daily workload should ramp up as the test approaches.</p>
+                <h2 className="text-3xl font-black text-slate-900">How hard do you want to go?</h2>
+                <p className="mt-2 text-slate-500">Set your daily practice volume for each phase of your prep.</p>
               </div>
 
-              <Card className="bg-navy-900/60">
-                <div className="mb-3 text-sm font-bold uppercase tracking-widest text-slate-400">
+              <Card className="bg-slate-50">
+                <div className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-400">
                   Phase distribution ({rampUpPercentage}% / {grindPercentage}% / {lastStretchPercentage}%)
                 </div>
                 <ReactSlider
                   className="relative mt-4 h-8 w-full cursor-pointer"
-                  thumbClassName="top-[4px] z-10 h-6 w-6 rounded-full border-[3px] border-white bg-neon-blue shadow-[0_0_10px_rgba(0,216,232,0.6)]"
-                  trackClassName="top-[12px] h-3 rounded-full bg-navy-700"
+                  thumbClassName="top-[4px] z-10 h-6 w-6 rounded-full border-[3px] border-white bg-cyan-600 squishy-shadow"
+                  trackClassName="top-[12px] h-3 rounded-full bg-slate-100"
                   value={[thumb1, thumb2]}
                   min={1}
                   max={99}
@@ -247,33 +250,33 @@ export default function OnboardingPage() {
                   }}
                 />
                 <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-4">
-                    <div className="text-xs font-bold uppercase tracking-widest text-blue-300">Build</div>
-                    <div className="mt-2 text-2xl font-display font-bold text-white">{rampUpPercentage}%</div>
+                  <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                    <div className="text-xs font-bold uppercase tracking-wider text-blue-500">Build</div>
+                    <div className="mt-2 text-2xl font-black text-slate-800">{rampUpPercentage}%</div>
                   </div>
-                  <div className="rounded-xl border border-purple-500/20 bg-purple-500/10 p-4">
-                    <div className="text-xs font-bold uppercase tracking-widest text-purple-300">Push</div>
-                    <div className="mt-2 text-2xl font-display font-bold text-white">{grindPercentage}%</div>
+                  <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4">
+                    <div className="text-xs font-bold uppercase tracking-wider text-purple-500">Push</div>
+                    <div className="mt-2 text-2xl font-black text-slate-800">{grindPercentage}%</div>
                   </div>
-                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
-                    <div className="text-xs font-bold uppercase tracking-widest text-amber-300">Polish</div>
-                    <div className="mt-2 text-2xl font-display font-bold text-white">{lastStretchPercentage}%</div>
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <div className="text-xs font-bold uppercase tracking-wider text-amber-500">Polish</div>
+                    <div className="mt-2 text-2xl font-black text-slate-800">{lastStretchPercentage}%</div>
                   </div>
                 </div>
               </Card>
 
               <div className="grid gap-4 md:grid-cols-3">
                 {[
-                  { key: 'rampUp', label: 'Build', color: 'text-blue-300' },
-                  { key: 'grind', label: 'Push', color: 'text-purple-300' },
-                  { key: 'lastStretch', label: 'Polish', color: 'text-amber-300' },
+                  { key: 'rampUp', label: 'Build', color: 'text-blue-500' },
+                  { key: 'grind', label: 'Push', color: 'text-purple-500' },
+                  { key: 'lastStretch', label: 'Polish', color: 'text-amber-500' },
                 ].map((phase) => (
-                  <Card key={phase.key} className="bg-navy-900/60">
-                    <div className={`text-sm font-bold uppercase tracking-widest ${phase.color}`}>{phase.label}</div>
-                    <div className="mt-3 text-4xl font-display font-bold text-white">
+                  <Card key={phase.key} className="bg-slate-50">
+                    <div className={`text-sm font-bold uppercase tracking-wider ${phase.color}`}>{phase.label}</div>
+                    <div className="mt-3 text-4xl font-black text-slate-800">
                       {qsPerDay[phase.key as keyof typeof qsPerDay]}
                     </div>
-                    <div className="mt-1 text-xs uppercase tracking-widest text-slate-500">questions per day</div>
+                    <div className="mt-1 text-xs uppercase tracking-wider text-slate-400">questions per day</div>
                     <input
                       type="range"
                       min={8}
@@ -285,7 +288,7 @@ export default function OnboardingPage() {
                           [phase.key]: Number(event.target.value),
                         }))
                       }
-                      className="mt-5 w-full accent-cyan-400"
+                      className="mt-5 w-full accent-cyan-600"
                     />
                   </Card>
                 ))}
@@ -295,8 +298,8 @@ export default function OnboardingPage() {
                 <Button variant="ghost" onClick={() => setStep(2)} disabled={loading}>
                   Back
                 </Button>
-                <Button variant="primary" neon onClick={handleSave} disabled={loading}>
-                  {loading ? 'Saving...' : 'Launch my SAT plan'}
+                <Button variant="primary" onClick={handleSave} disabled={loading}>
+                  {loading ? 'Building your plan...' : "Let's go!"}
                 </Button>
               </div>
             </div>

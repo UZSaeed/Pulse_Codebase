@@ -50,12 +50,33 @@ export async function POST(request: NextRequest) {
     const modelTier = selectModelTier(tokensUsedThisMonth, monthlyTokenBudget);
     const now = new Date();
 
-    // The DB can be unavailable in local dev; question serving should survive that.
+    // Check DB connectivity once up front. If the DB is unreachable we fail fast
+    // instead of silently falling through to expensive LLM generation on every request.
+    let dbHealthy = true;
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch (dbError) {
+      dbHealthy = false;
+      console.error('[sat/generate] DB unreachable — refusing to serve via LLM fallback to avoid runaway costs:', dbError);
+    }
+
+    if (!dbHealthy) {
+      const fallback = getFallbackQuestions(subject, resolved.topic ? [resolved.topic] : undefined, count);
+      if (fallback.length > 0) {
+        return NextResponse.json({ question: fallback[0], questions: fallback, modelTier, source: 'offline_fallback' });
+      }
+      return NextResponse.json(
+        { error: 'Database is unreachable. Please try again shortly.' },
+        { status: 503 }
+      );
+    }
+
+    // Lenient wrapper for non-critical writes (exposure tracking, etc.)
     const safeDb = async <T>(operation: () => Promise<T>, fallback: T): Promise<T> => {
       try {
         return await operation();
       } catch (dbError) {
-        console.warn('[sat/generate] DB unavailable, continuing without persistence:', dbError);
+        console.warn('[sat/generate] Non-critical DB write failed:', dbError);
         return fallback;
       }
     };
@@ -108,59 +129,56 @@ export async function POST(request: NextRequest) {
       }
     ): Promise<string | null> => {
       const tags = buildTagsFromGeneratedQuestion(question);
-      const created = await safeDb(
-        () =>
-          prisma.question.create({
-            data: {
-              subject: question.subject,
-              domain: tags.domain ?? resolved.chapter?.name ?? null,
-              skill: tags.skill,
-              topic: question.topic,
-              chapterId: tags.chapterId ?? resolved.chapter?.id ?? null,
-              questionType: tags.questionType,
-              answerFormat: tags.answerFormat,
-              difficultyBand: tags.difficultyBand,
-              difficultyTier: tags.difficultyTier,
-              passage: question.passage ?? null,
-              text: question.stem,
-              choices: JSON.stringify(question.choices),
-              correctAnswer: question.correctAnswer,
-              explanation: question.explanation,
-              distractorExplanations: JSON.stringify(question.distractorExplanations ?? {}),
-              baseDifficulty: question.difficulty,
-              tagsJson: tags.tags,
-              graphSpec: question.graphSpec ? (question.graphSpec as unknown as Prisma.InputJsonValue) : undefined,
-              templateId: extras.templateId,
-              templateSeed: extras.templateSeed,
-              generationType: extras.generationType,
-              sourceKind: extras.sourceKind,
-              sourceReferenceId: extras.sourceReferenceId,
-              sourceReferencePdf: extras.sourceReferencePdf,
-              sourceReferencePage: extras.sourceReferencePage,
-            },
-          }),
-        null
-      );
-      return created?.id ?? null;
+      try {
+        const created = await prisma.question.create({
+          data: {
+            subject: question.subject,
+            domain: tags.domain ?? resolved.chapter?.name ?? null,
+            skill: tags.skill,
+            topic: question.topic,
+            chapterId: tags.chapterId ?? resolved.chapter?.id ?? null,
+            questionType: tags.questionType,
+            answerFormat: tags.answerFormat,
+            difficultyBand: tags.difficultyBand,
+            difficultyTier: tags.difficultyTier,
+            passage: question.passage ?? null,
+            text: question.stem,
+            choices: JSON.stringify(question.choices),
+            correctAnswer: question.correctAnswer,
+            explanation: question.explanation,
+            distractorExplanations: JSON.stringify(question.distractorExplanations ?? {}),
+            baseDifficulty: question.difficulty,
+            tagsJson: tags.tags,
+            graphSpec: question.graphSpec ? (question.graphSpec as unknown as Prisma.InputJsonValue) : undefined,
+            templateId: extras.templateId,
+            templateSeed: extras.templateSeed,
+            generationType: extras.generationType,
+            sourceKind: extras.sourceKind,
+            sourceReferenceId: extras.sourceReferenceId,
+            sourceReferencePdf: extras.sourceReferencePdf,
+            sourceReferencePage: extras.sourceReferencePage,
+          },
+        });
+        return created.id;
+      } catch (err) {
+        console.warn('[sat/generate] Failed to persist question (will still serve it):', err);
+        return null;
+      }
     };
 
     // Layer 1: existing DB questions matching subject/domain/topic/band.
-    const existingQuestions = await safeDb(
-      () =>
-        prisma.question.findMany({
-          where: {
-            subject,
-            ...(resolved.chapter ? { OR: [{ domain: resolved.chapter.name }, { chapterId: resolved.chapter.id }] } : {}),
-            ...(resolved.topic ? { topic: resolved.topic } : {}),
-            difficultyBand: resolved.band,
-            correctAnswer: { not: null },
-            ...(blockedQuestionIds.length > 0 ? { id: { notIn: blockedQuestionIds } } : {}),
-          },
-          take: count,
-          orderBy: [{ updatedAt: 'asc' }, { createdAt: 'desc' }],
-        }),
-      []
-    );
+    const existingQuestions = await prisma.question.findMany({
+      where: {
+        subject,
+        ...(resolved.chapter ? { OR: [{ domain: resolved.chapter.name }, { chapterId: resolved.chapter.id }] } : {}),
+        ...(resolved.topic ? { topic: resolved.topic } : {}),
+        difficultyBand: resolved.band,
+        correctAnswer: { not: null },
+        ...(blockedQuestionIds.length > 0 ? { id: { notIn: blockedQuestionIds } } : {}),
+      },
+      take: count,
+      orderBy: [{ updatedAt: 'asc' }, { createdAt: 'desc' }],
+    });
 
     if (existingQuestions.length >= count) {
       await markExposure(existingQuestions.map((question) => question.id));

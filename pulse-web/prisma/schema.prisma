@@ -7,30 +7,31 @@ datasource db {
 }
 
 model User {
-  id               String            @id  // Supabase auth.users.id
+  id               String            @id
   email            String            @unique
   name             String?
-  image            String?           // Google profile picture
+  image            String?
   updatedAt        DateTime          @updatedAt
   subscriptionTier String            @default("FREE")
   dailyStreak      Int               @default(0)
   lastPracticeDate DateTime?
   totalXp          Int               @default(0)
+  onboardingCompleted Boolean        @default(false)
   performances     UserPerformance[]
   calendarState    CalendarState?
   subjectStats     SubjectStats[]
   topicStats       TopicStats[]
   questionFlags    QuestionFlag[]
   questionStates   UserQuestionState[]
-  onboardingCompleted Boolean @default(false)
   preferences      UserPreference?
   practiceTests    PracticeTestResult[]
+  srsCards         SrsCard[]
 }
 
 model SubjectStats {
   id        String   @id @default(uuid())
   userId    String
-  subject   String   // reading_writing, math
+  subject   String
   elo       Int      @default(1000)
   xp        Int      @default(0)
   confidence Float   @default(3)
@@ -42,7 +43,7 @@ model SubjectStats {
 model TopicStats {
   id        String   @id @default(uuid())
   userId    String
-  subject   String   // reading_writing, math
+  subject   String
   topicName String
   elo       Int      @default(1000)
   xp        Int      @default(0)
@@ -64,37 +65,79 @@ model Question {
   difficultyBand String?
   difficultyTier String?
   passage       String?
-  text          String   // This can act as the 'stem'
-  choices       String?  // JSON string storing choices array
-  correctAnswer String?  // e.g., 'A', 'B', 'C', 'D'
+  text          String
+  choices       String?
+  correctAnswer String?
   explanation   String
-  distractorExplanations String? // JSON string
+  distractorExplanations String?
   baseDifficulty Int     @default(1000)
   tagsJson      Json?
-  
-  // Sourced Content Metadata
-  imageUrls      String?  // JSON array of figure URLs (or imagePrompt for legacy)
-  sourcePmcId    String?  // PMC ID for sourced papers
-  sourceTitle    String?  // Paper title
-  sourceAuthors  String?  // Paper authors
-  sourceLicense  String?  // OA license
+
+  imageUrls      String?
+  sourcePmcId    String?
+  sourceTitle    String?
+  sourceAuthors  String?
+  sourceLicense  String?
   requiresFigure Boolean  @default(false)
-  referencedFigure String? // e.g., "Figure 1"
-  graphSpec      Json?    // function-plot spec rendered client-side by MathGraph
-  templateId     String?  // math template that produced this question
-  templateSeed   Int?     // RNG seed for deterministic reproduction
-  generationType String   @default("hallucinated") // "sourced" | "discrete" | "hallucinated" | "template"
-  sourceKind     String   @default("generated") // generated | official_import | official_inspired | user_authored
+  referencedFigure String?
+  diagramUrl     String?
+  diagramAttribution String?
+  hoverDefinitions String?
+  seedTermId     String?
+  graphSpec      Json?
+  templateId     String?
+  templateSeed   Int?
+  generationType String   @default("hallucinated")
+  sourceKind     String   @default("generated")
   sourceReferenceId String?
   sourceReferencePdf String?
   sourceReferencePage Int?
-  
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  
+
   performances  UserPerformance[]
   flags         QuestionFlag[]
   userStates    UserQuestionState[]
+  srsCards      SrsCard[]
+}
+
+model SeedTerm {
+  id        String    @id @default(uuid())
+  front     String
+  back      String
+  subject   String
+  category  String?
+  source    String    @default("aamc_outline")
+  deckName  String?
+  createdAt DateTime  @default(now())
+  srsCards  SrsCard[]
+}
+
+model SrsCard {
+  id             String    @id @default(uuid())
+  userId         String
+  seedTermId     String
+  questionId     String?
+  state          String    @default("new")
+  interval       Int       @default(0)
+  easeFactor     Float     @default(2.5)
+  repetitions    Int       @default(0)
+  step           Int       @default(0)
+  lapses         Int       @default(0)
+  dueDate        DateTime  @default(now())
+  lastReviewedAt DateTime?
+  subject        String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  introducedAt   DateTime?
+  question       Question? @relation(fields: [questionId], references: [id])
+  seedTerm       SeedTerm  @relation(fields: [seedTermId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, seedTermId])
+  @@index([userId, dueDate])
+  @@index([userId, subject, state])
 }
 
 model UserPerformance {
@@ -104,9 +147,9 @@ model UserPerformance {
   isCorrect      Boolean
   timeTakenMs    Int?
   eloChange      Int      @default(0)
-  srsInterval    Int      @default(0) // SM-2 interval length
-  srsRepetitions Int      @default(0)
-  srsEaseFactor  Float    @default(2.5)
+  srsInterval    Int       @default(0)
+  srsRepetitions Int       @default(0)
+  srsEaseFactor  Float     @default(2.5)
   nextReviewDate DateTime?
   createdAt      DateTime @default(now())
 
@@ -153,7 +196,7 @@ model QuestionFlag {
   id         String   @id @default(uuid())
   userId     String
   questionId String
-  reason     String   // "inaccurate", "poor_visual", "weird_wording", "other"
+  reason     String
   details    String?
   createdAt  DateTime @default(now())
 
@@ -170,16 +213,19 @@ model UserPreference {
   recentReadingWritingScore  Int?
   recentMathScore            Int?
   confidenceProfile          Json?
-  
-  // Phase splits (percentages adding up to 100)
+  testDate                   DateTime?
+
   rampUpPercentage           Int      @default(35)
   grindPercentage            Int      @default(45)
   lastStretchPercentage      Int      @default(20)
 
-  // Questions per day targets
   rampUpQuestionsPerDay      Int      @default(16)
   grindQuestionsPerDay       Int      @default(24)
   lastStretchQuestionsPerDay Int      @default(32)
+
+  rampUpNewCardsPerDay       Int      @default(10)
+  grindNewCardsPerDay        Int      @default(20)
+  lastStretchNewCardsPerDay  Int      @default(15)
 
   updatedAt                  DateTime @updatedAt
   user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -189,9 +235,9 @@ model PracticeTestResult {
   id                  String   @id @default(uuid())
   userId              String
   takenAt             DateTime @default(now())
-  readingWritingScore Int      // section score, 200-800
-  mathScore           Int      // section score, 200-800
-  domainBreakdown     Json?    // { [chapterId]: { correct: number, total: number } }
+  readingWritingScore Int
+  mathScore           Int
+  domainBreakdown     Json?
   notes               String?
   createdAt           DateTime @default(now())
 

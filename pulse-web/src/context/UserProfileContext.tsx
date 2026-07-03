@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import { type McatSubject, MCAT_SUBJECTS, getTieredRank } from '@/lib/elo';
+import { type McatSubject, MCAT_SUBJECTS, getTieredRank, satScoreToElo, DEFAULT_ELO } from '@/lib/elo';
 import {
   type UserProfile,
   type SessionResultInput,
@@ -16,7 +16,7 @@ import { MCAT_CHAPTERS } from '@/lib/chapters';
 interface UserProfileContextType {
   profile: UserProfile;
   loading: boolean;
-  submitSession: (results: SessionResultInput[]) => ProcessedSessionResult;
+  submitSession: (results: SessionResultInput[], completedTaskId?: string | null) => ProcessedSessionResult;
   persistSession: (
     processed: ProcessedSessionResult,
     subject: McatSubject,
@@ -83,6 +83,27 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
         updated.practiceTests = Array.isArray(data.practiceTests) ? data.practiceTests : [];
 
+        const rwScore = data.preferences?.recentReadingWritingScore as number | undefined;
+        const mathScore = data.preferences?.recentMathScore as number | undefined;
+        const satScoreForSubject: Record<McatSubject, number | undefined> = {
+          reading_writing: rwScore,
+          math: mathScore,
+        };
+
+        for (const subject of MCAT_SUBJECTS) {
+          const score = satScoreForSubject[subject];
+          if (score) {
+            const mappedElo = satScoreToElo(score);
+            for (const chapter of MCAT_CHAPTERS[subject]) {
+              for (const topic of chapter.topics) {
+                if (updated.subjects[subject].topics[topic] && updated.subjects[subject].topics[topic].elo === DEFAULT_ELO) {
+                  updated.subjects[subject].topics[topic].elo = mappedElo;
+                }
+              }
+            }
+          }
+        }
+
         if (data.preferences?.confidenceProfile) {
           const confidenceProfile = data.preferences.confidenceProfile as Record<string, number>;
           for (const subject of MCAT_SUBJECTS) {
@@ -92,7 +113,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
               for (const topic of chapter.topics) {
                 if (updated.subjects[subject].topics[topic]) {
                   updated.subjects[subject].topics[topic].confidence = confidence;
-                  if (updated.subjects[subject].topics[topic].elo === 1000) {
+                  if (!satScoreForSubject[subject] && updated.subjects[subject].topics[topic].elo === DEFAULT_ELO) {
                     updated.subjects[subject].topics[topic].elo = 850 + confidence * 130;
                   }
                 }
@@ -108,7 +129,20 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         const eloSum = MCAT_SUBJECTS.reduce((sum, subject) => sum + updated.subjects[subject].elo, 0);
         updated.overallElo = Math.round(eloSum / MCAT_SUBJECTS.length);
         updated.overallRank = getTieredRank(updated.overallElo);
-        updated.plannerTasks = generateWeeklyPlan(updated, new Date().toISOString().split('T')[0]);
+
+        const prevCompleted = new Set(
+          prev.plannerTasks.filter((t) => t.status === 'completed').map((t) => t.id)
+        );
+        // Also pull completed IDs from localStorage (survives page refresh)
+        try {
+          const stored = JSON.parse(localStorage.getItem('completed_task_ids') || '[]') as string[];
+          stored.forEach((id) => prevCompleted.add(id));
+        } catch { /* ignore */ }
+
+        const freshTasks = generateWeeklyPlan(updated, new Date().toISOString().split('T')[0]);
+        updated.plannerTasks = freshTasks.map((task) =>
+          prevCompleted.has(task.id) ? { ...task, status: 'completed' as const } : task
+        );
         return updated;
       });
     } catch (error) {
@@ -123,12 +157,29 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
   }, [loadProfile]);
 
   const submitSession = useCallback(
-    (results: SessionResultInput[]): ProcessedSessionResult => {
+    (results: SessionResultInput[], completedTaskId?: string | null): ProcessedSessionResult => {
       const processed = processSessionResults(profile, results);
-      processed.newProfile.plannerTasks = generateWeeklyPlan(
+
+      // Collect previously completed task IDs so regeneration preserves them
+      const completedIds = new Set(
+        profile.plannerTasks
+          .filter((t) => t.status === 'completed')
+          .map((t) => t.id)
+      );
+      if (completedTaskId) completedIds.add(completedTaskId);
+
+      const freshTasks = generateWeeklyPlan(
         processed.newProfile,
         new Date().toISOString().split('T')[0]
       );
+      processed.newProfile.plannerTasks = freshTasks.map((task) =>
+        completedIds.has(task.id) ? { ...task, status: 'completed' as const } : task
+      );
+
+      try {
+        localStorage.setItem('completed_task_ids', JSON.stringify([...completedIds]));
+      } catch { /* ignore */ }
+
       setProfile(processed.newProfile);
       return processed;
     },
@@ -173,14 +224,23 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const togglePlannerTask = useCallback((taskId: string) => {
-    setProfile((prev) => ({
-      ...prev,
-      plannerTasks: prev.plannerTasks.map((task) =>
-        task.id === taskId
-          ? { ...task, status: task.status === 'completed' ? 'pending' : 'completed' }
-          : task
-      ),
-    }));
+    setProfile((prev) => {
+      const updated = {
+        ...prev,
+        plannerTasks: prev.plannerTasks.map((task) =>
+          task.id === taskId
+            ? { ...task, status: task.status === 'completed' ? ('pending' as const) : ('completed' as const) }
+            : task
+        ),
+      };
+      try {
+        const completedIds = updated.plannerTasks
+          .filter((t) => t.status === 'completed')
+          .map((t) => t.id);
+        localStorage.setItem('completed_task_ids', JSON.stringify(completedIds));
+      } catch { /* ignore */ }
+      return updated;
+    });
   }, []);
 
   const addPlannerTask = useCallback((taskData: Omit<import('@/lib/planner').PlannerTask, 'id'>) => {

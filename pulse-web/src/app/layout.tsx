@@ -1,26 +1,17 @@
 import type { Metadata } from "next";
-import { Inter, Outfit, Orbitron } from "next/font/google";
+import { Nunito } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const nunito = Nunito({
+  variable: "--font-nunito",
   subsets: ["latin"],
-});
-
-const outfit = Outfit({
-  variable: "--font-outfit",
-  subsets: ["latin"],
-});
-
-const orbitron = Orbitron({
-  variable: "--font-orbitron",
-  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800", "900"],
 });
 
 export const metadata: Metadata = {
-  title: "Spike SAT Prep",
-  description: "Adaptive SAT prep with official-bank grounding, domain confidence tracking, and section-aware planning.",
+  title: "SpikePrep — SAT Prep That Adapts to You",
+  description: "Fun, adaptive SAT prep that finds your weak spots and gets you ready for test day.",
 };
 
 export default function RootLayout({
@@ -29,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${outfit.variable} ${orbitron.variable} dark antialiased`}>
-      <body className="min-h-screen flex flex-col bg-navy-900 text-slate-100 font-sans">
+    <html lang="en" className={`${nunito.variable} antialiased`}>
+      <body className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
         <Providers>{children}</Providers>
       </body>
     </html>
