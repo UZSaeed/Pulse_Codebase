@@ -1,24 +1,48 @@
 /**
- * User Profile state management for Spike MCAT Prep.
- * 
- * Handles XP awards, streak tracking, and ELO processing.
- * Designed to work with both in-memory state and database persistence.
+ * User profile state management for Spike SAT Prep.
  */
 
-import { McatSubject, MCAT_SUBJECTS, DEFAULT_ELO, calculateElo, getTieredRank, type TieredRankInfo } from './elo';
+import {
+  type McatSubject,
+  MCAT_SUBJECTS,
+  DEFAULT_ELO,
+  calculateElo,
+  getTieredRank,
+  type TieredRankInfo,
+} from './elo';
+import { MCAT_CHAPTERS } from './chapters';
+import { generateWeeklyPlan } from './planner';
 
-// ─── Types ───────────────────────────────────────────────────────
+export interface DomainProfile {
+  elo: number;
+  xp: number;
+  confidence: number;
+}
 
 export interface SubjectProfile {
   subject: McatSubject;
   elo: number;
   xp: number;
+  confidence: number;
   rank: TieredRankInfo;
-  topics: Record<string, { elo: number; xp: number }>;
+  topics: Record<string, DomainProfile>;
+}
+
+export interface PracticeTestSummary {
+  id?: string;
+  takenAt: string;
+  readingWritingScore: number;
+  mathScore: number;
+  /** Keyed by chapterId (e.g. "math-algebra") → raw section-breakdown counts. */
+  domainBreakdown?: Record<string, { correct: number; total: number }> | null;
 }
 
 export interface UserPreferences {
-  testDate: string | null;
+  nextTestDate: string | null;
+  preparedByDate: string | null;
+  hasScheduledTest: boolean;
+  recentReadingWritingScore: number | null;
+  recentMathScore: number | null;
   rampUpPercentage: number;
   grindPercentage: number;
   lastStretchPercentage: number;
@@ -35,10 +59,12 @@ export interface UserProfile {
   overallRank: TieredRankInfo;
   totalXp: number;
   dailyStreak: number;
-  lastPracticeDate: string | null; // ISO date string
+  lastPracticeDate: string | null;
   xpMultiplier: number;
   plannerTasks: import('./planner').PlannerTask[];
   preferences: UserPreferences;
+  /** Most recent first. Logged from full-length practice tests. */
+  practiceTests: PracticeTestSummary[];
 }
 
 export interface SessionResultInput {
@@ -59,98 +85,83 @@ export interface ProcessedSessionResult {
   rankChanged: boolean;
 }
 
-// ─── XP & Streak Logic ──────────────────────────────────────────
+const XP_PER_CORRECT = 12;
+const XP_PER_INCORRECT = 4;
 
-const XP_PER_CORRECT = 10;
-const XP_PER_INCORRECT = 3; // Participation XP
-
-/** XP multiplier based on streak: +0.25x per 7-day milestone, max 2.0x */
 export function getXpMultiplier(streak: number): number {
-  const bonus = Math.floor(streak / 7) * 0.25;
-  return Math.min(2.0, 1.0 + bonus);
+  const bonus = Math.floor(streak / 5) * 0.15;
+  return Math.min(2, 1 + bonus);
 }
 
-/** Level derived from XP: level = floor(xp / 100) + 1 */
 export function getLevel(xp: number): number {
-  return Math.floor(xp / 100) + 1;
+  return Math.floor(xp / 125) + 1;
 }
 
-/** Check if crossing a level boundary */
 export function checkLevelUp(oldXp: number, newXp: number): boolean {
   return getLevel(newXp) > getLevel(oldXp);
 }
 
-import { generateWeeklyPlan } from './planner';
-
-// ─── Profile Factory ─────────────────────────────────────────────
-
-/** Create a fresh default profile */
-export function createDefaultProfile(id: string = 'local', name: string = 'Uzair'): UserProfile {
-  const subjects = {} as Record<McatSubject, SubjectProfile>;
-  for (const s of MCAT_SUBJECTS) {
-    const defaultTopics: Record<string, { elo: number; xp: number }> = {};
-    const MCAT_CHAPTERS = require('./chapters').MCAT_CHAPTERS;
-    if (MCAT_CHAPTERS[s]) {
-      for (const chapter of MCAT_CHAPTERS[s]) {
-        for (const topic of chapter.topics) {
-          defaultTopics[topic] = { elo: DEFAULT_ELO, xp: 0 };
-        }
-      }
+function buildDefaultTopicMap(subject: McatSubject): Record<string, DomainProfile> {
+  const topics: Record<string, DomainProfile> = {};
+  for (const chapter of MCAT_CHAPTERS[subject]) {
+    for (const topic of chapter.topics) {
+      topics[topic] = { elo: DEFAULT_ELO, xp: 0, confidence: 3 };
     }
+  }
+  return topics;
+}
 
-    subjects[s] = {
-      subject: s,
+export function createDefaultProfile(id: string = 'local', name: string = 'Student'): UserProfile {
+  const subjects = {} as Record<McatSubject, SubjectProfile>;
+
+  for (const subject of MCAT_SUBJECTS) {
+    subjects[subject] = {
+      subject,
       elo: DEFAULT_ELO,
       xp: 0,
+      confidence: 3,
       rank: getTieredRank(DEFAULT_ELO),
-      topics: defaultTopics,
+      topics: buildDefaultTopicMap(subject),
     };
   }
 
-  const overallElo = DEFAULT_ELO;
-  
-  // Create a template profile without tasks first
   const baseProfile: UserProfile = {
     id,
     name,
     subjects,
-    overallElo,
-    overallRank: getTieredRank(overallElo),
+    overallElo: DEFAULT_ELO,
+    overallRank: getTieredRank(DEFAULT_ELO),
     totalXp: 0,
     dailyStreak: 0,
     lastPracticeDate: null,
-    xpMultiplier: 1.0,
+    xpMultiplier: 1,
     plannerTasks: [],
+    practiceTests: [],
     preferences: {
-      testDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(), // roughly 3 months out
-      rampUpPercentage: 30,
-      grindPercentage: 50,
+      nextTestDate: null,
+      preparedByDate: new Date(Date.now() + 84 * 24 * 60 * 60 * 1000).toISOString(),
+      hasScheduledTest: false,
+      recentReadingWritingScore: null,
+      recentMathScore: null,
+      rampUpPercentage: 35,
+      grindPercentage: 45,
       lastStretchPercentage: 20,
-      rampUpQuestionsPerDay: 30,
-      grindQuestionsPerDay: 60,
-      lastStretchQuestionsPerDay: 90,
-    }
+      rampUpQuestionsPerDay: 16,
+      grindQuestionsPerDay: 24,
+      lastStretchQuestionsPerDay: 32,
+    },
   };
-  
-  // Generate the initial weekly plan from today
+
   const todayStr = new Date().toISOString().split('T')[0];
   baseProfile.plannerTasks = generateWeeklyPlan(baseProfile, todayStr);
-  
   return baseProfile;
 }
 
-// ─── Session Processing ──────────────────────────────────────────
-
-/**
- * Process a completed practice session and return updated profile + deltas.
- * This is the core engine that connects questions answered → ELO/XP changes.
- */
 export function processSessionResults(
   profile: UserProfile,
   results: SessionResultInput[],
-  totalAnsweredInSubject: number = 50 // Used for K-factor; default to mid-range
+  totalAnsweredInSubject: number = 40
 ): ProcessedSessionResult {
-  // Clone profile to avoid mutation
   const newProfile = structuredClone(profile);
   const oldOverallRank = getTieredRank(newProfile.overallElo);
 
@@ -158,81 +169,81 @@ export function processSessionResults(
   let totalEloDelta = 0;
   let totalRawXp = 0;
 
-  // Update streak
   const today = new Date().toISOString().split('T')[0];
-  if (newProfile.lastPracticeDate) {
-    const lastDate = new Date(newProfile.lastPracticeDate);
+  if (!newProfile.lastPracticeDate) {
+    newProfile.dailyStreak = 1;
+  } else if (newProfile.lastPracticeDate === today) {
+    // no-op
+  } else {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
-    
-    if (newProfile.lastPracticeDate === today) {
-      // Already practiced today, keep streak
-    } else if (newProfile.lastPracticeDate === yesterdayStr) {
-      // Practiced yesterday, increment streak
-      newProfile.dailyStreak += 1;
-    } else {
-      // Streak broken
-      newProfile.dailyStreak = 1;
-    }
-  } else {
-    newProfile.dailyStreak = 1;
+    newProfile.dailyStreak = newProfile.lastPracticeDate === yesterdayStr ? newProfile.dailyStreak + 1 : 1;
   }
   newProfile.lastPracticeDate = today;
   newProfile.xpMultiplier = getXpMultiplier(newProfile.dailyStreak);
 
-  // Process each question result
   for (const result of results) {
     const subjectProfile = newProfile.subjects[result.subject];
-    
-    // Calculate ELO change for Subject
-    const eloResult = calculateElo(
+
+    const sectionElo = calculateElo(
       subjectProfile.elo,
       result.questionDifficulty,
       result.isCorrect,
       totalAnsweredInSubject
     );
-    
-    subjectProfile.elo = eloResult.newUserElo;
-    subjectProfile.rank = eloResult.tieredRank;
+    subjectProfile.elo = sectionElo.newUserElo;
+    subjectProfile.rank = sectionElo.tieredRank;
 
-    // Calculate ELO change for Subtopic
     if (!subjectProfile.topics[result.topic]) {
-      subjectProfile.topics[result.topic] = { elo: subjectProfile.elo, xp: 0 }; // fallback
+      subjectProfile.topics[result.topic] = {
+        elo: DEFAULT_ELO,
+        xp: 0,
+        confidence: 3,
+      };
     }
-    const topicEloResult = calculateElo(
+
+    const topicElo = calculateElo(
       subjectProfile.topics[result.topic].elo,
       result.questionDifficulty,
       result.isCorrect,
-      totalAnsweredInSubject // mock K factor
+      totalAnsweredInSubject
     );
-    subjectProfile.topics[result.topic].elo = topicEloResult.newUserElo;
+    subjectProfile.topics[result.topic].elo = topicElo.newUserElo;
+    subjectProfile.topics[result.topic].confidence = Math.max(
+      1,
+      Math.min(
+        5,
+        subjectProfile.topics[result.topic].confidence + (result.isCorrect ? 0.1 : -0.1)
+      )
+    );
 
-    // Track per-topic changes for UI
     if (!eloChanges[result.topic]) {
-      eloChanges[result.topic] = { topic: result.topic, subject: result.subject, eloDelta: 0 };
+      eloChanges[result.topic] = {
+        topic: result.topic,
+        subject: result.subject,
+        eloDelta: 0,
+      };
     }
-    eloChanges[result.topic].eloDelta += topicEloResult.eloChange;
-    totalEloDelta += eloResult.eloChange;
-
-    // Award XP
-    const baseXp = result.isCorrect ? XP_PER_CORRECT : XP_PER_INCORRECT;
-    totalRawXp += baseXp;
+    eloChanges[result.topic].eloDelta += topicElo.eloChange;
+    totalEloDelta += sectionElo.eloChange;
+    totalRawXp += result.isCorrect ? XP_PER_CORRECT : XP_PER_INCORRECT;
   }
 
-  // Apply multiplier to XP
   const xpGained = Math.round(totalRawXp * newProfile.xpMultiplier);
   const oldTotalXp = newProfile.totalXp;
   newProfile.totalXp += xpGained;
 
-  // Distribute XP to subject
   const primarySubject = results[0]?.subject;
   if (primarySubject) {
     newProfile.subjects[primarySubject].xp += xpGained;
+    const avgConfidence =
+      Object.values(newProfile.subjects[primarySubject].topics).reduce((sum, topic) => sum + topic.confidence, 0) /
+      Math.max(1, Object.keys(newProfile.subjects[primarySubject].topics).length);
+    newProfile.subjects[primarySubject].confidence = Math.round(avgConfidence * 10) / 10;
   }
 
-  // Recalculate overall ELO (average of all subjects)
-  const eloSum = MCAT_SUBJECTS.reduce((sum, s) => sum + newProfile.subjects[s].elo, 0);
+  const eloSum = MCAT_SUBJECTS.reduce((sum, subject) => sum + newProfile.subjects[subject].elo, 0);
   newProfile.overallElo = Math.round(eloSum / MCAT_SUBJECTS.length);
   newProfile.overallRank = getTieredRank(newProfile.overallElo);
 

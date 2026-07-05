@@ -1,101 +1,69 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { requireCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-export async function submitOnboarding(data: {
-  testDate: Date;
+export interface SatPreferenceInput {
+  nextTestDate: Date | null;
+  preparedByDate: Date | null;
+  hasScheduledTest: boolean;
+  recentReadingWritingScore: number | null;
+  recentMathScore: number | null;
+  confidenceProfile: Record<string, number>;
   rampUpPercentage: number;
   grindPercentage: number;
   lastStretchPercentage: number;
   rampUpQuestionsPerDay: number;
   grindQuestionsPerDay: number;
   lastStretchQuestionsPerDay: number;
-}) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+}
 
-  if (!user) {
-    throw new Error('Not logged in');
-  }
+async function requireUserId() {
+  const user = await requireCurrentUser();
+  return user.id;
+}
 
-  const { testDate, ...prefs } = data;
-
+async function savePreferencePayload(userId: string, data: SatPreferenceInput) {
   await prisma.user.update({
-    where: { id: user.id },
+    where: { id: userId },
     data: {
       onboardingCompleted: true,
       preferences: {
         upsert: {
-          create: {
-            testDate,
-            ...prefs,
-          },
-          update: {
-            testDate,
-            ...prefs,
-          },
+          create: data,
+          update: data,
         },
       },
     },
   });
+}
 
+export async function submitOnboarding(data: SatPreferenceInput) {
+  const userId = await requireUserId();
+  await savePreferencePayload(userId, data);
   revalidatePath('/dashboard');
   redirect('/dashboard');
 }
 
-export async function saveSettings(data: {
-  testDate: Date;
-  rampUpPercentage: number;
-  grindPercentage: number;
-  lastStretchPercentage: number;
-  rampUpQuestionsPerDay: number;
-  grindQuestionsPerDay: number;
-  lastStretchQuestionsPerDay: number;
-}) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error('Not logged in');
-  }
-
-  const { testDate, ...prefs } = data;
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      preferences: {
-        upsert: {
-          create: {
-            testDate,
-            ...prefs,
-          },
-          update: {
-            testDate,
-            ...prefs,
-          },
-        },
-      },
-    },
-  });
-
+export async function saveSettings(data: SatPreferenceInput) {
+  const userId = await requireUserId();
+  await savePreferencePayload(userId, data);
   revalidatePath('/settings');
+  revalidatePath('/dashboard');
+  revalidatePath('/planner');
   return { success: true };
 }
 
 export async function getUserPreferences() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) return null;
+  const userId = await requireUserId().catch(() => null);
+  if (!userId) return null;
 
   const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
+    where: { id: userId },
     include: { preferences: true },
   });
 
-  return (dbUser as any)?.preferences || null;
+  return dbUser?.preferences ?? null;
 }

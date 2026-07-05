@@ -8,10 +8,12 @@ interface CardProps {
 }
 
 export const Card: React.FC<CardProps> = ({ children, className = '', neonHighlight = false, onClick }) => {
-  const highlight = neonHighlight ? 'border border-neon-blue/30 hover:border-neon-blue/80 transition-colors' : 'border border-navy-700';
+  const highlight = neonHighlight
+    ? 'border-2 border-cyan-600/30 hover:border-cyan-600/60 transition-colors'
+    : 'border border-slate-200';
   
   return (
-    <div className={`bg-navy-800 rounded-xl p-6 ${highlight} shadow-lg ${className}`} onClick={onClick}>
+    <div className={`bg-white rounded-2xl p-6 ${highlight} squishy-shadow ${className}`} onClick={onClick}>
       {children}
     </div>
   );

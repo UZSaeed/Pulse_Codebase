@@ -14,22 +14,22 @@ export const Button: React.FC<ButtonProps> = ({
   className = '',
   ...props
 }) => {
-  const baseStyle = "inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 cursor-pointer";
+  const baseStyle = "inline-flex items-center justify-center font-bold transition-all duration-200 cursor-pointer active:scale-[0.97]";
   
   const variants = {
-    primary: "bg-neon-blue text-navy-900 hover:bg-neon-blue-hover",
-    secondary: "bg-navy-700 text-slate-100 hover:bg-navy-800",
-    outline: "border border-neon-blue text-neon-blue hover:bg-neon-blue hover:text-navy-900",
-    ghost: "text-slate-300 hover:text-neon-blue hover:bg-navy-800"
+    primary: "bg-cyan-600 text-white rounded-full hover:bg-cyan-700 squishy-shadow hover:squishy-shadow-hover",
+    secondary: "bg-slate-100 text-slate-700 rounded-full hover:bg-slate-200",
+    outline: "border-2 border-cyan-600 text-cyan-600 rounded-full hover:bg-cyan-600 hover:text-white",
+    ghost: "text-slate-500 rounded-xl hover:text-cyan-600 hover:bg-cyan-50"
   };
 
   const sizes = {
-    sm: "px-3 py-1.5 text-sm",
-    md: "px-4 py-2 text-base",
-    lg: "px-6 py-3 text-lg"
+    sm: "px-4 py-2 text-sm",
+    md: "px-5 py-2.5 text-base",
+    lg: "px-7 py-3.5 text-lg"
   };
 
-  const neonStyle = neon ? "neon-shadow neon-border" : "";
+  const neonStyle = neon ? "accent-glow" : "";
 
   return (
     <button 

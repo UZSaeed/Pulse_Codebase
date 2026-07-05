@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { calculateElo } from '@/lib/elo';
 import { calculateSrs, mapToQuality, defaultSrsState, type SrsState } from '@/lib/srs';
 import { prisma } from '@/lib/prisma';
+import { getNextQuestionEligibleAt } from '@/lib/sat-tagging';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,8 +23,8 @@ export async function POST(request: NextRequest) {
       questionId,
       subject,
       topicName,
-      userElo = 1500,
-      questionElo = 1500,
+      userElo = 1000,
+      questionElo = 1000,
       isCorrect,
       totalAnswered = 0,
       srsState,
@@ -50,12 +51,18 @@ export async function POST(request: NextRequest) {
     const srsResult = calculateSrs(prevSrs, quality);
 
     // XP awarded
-    const baseXp = isCorrect ? 25 : 5;
-    const eloBonus = isCorrect && eloResult.eloChange > 15 ? 10 : 0;
+    const baseXp = isCorrect ? 12 : 4;
+    const eloBonus = isCorrect && eloResult.eloChange > 15 ? 6 : 0;
     const xpAwarded = baseXp + eloBonus;
 
     // Persist if user is logged in
     if (userId && questionId) {
+      const reviewDate = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + Math.max(1, srsResult.interval));
+        return d;
+      })();
+
       await prisma.userPerformance.create({
         data: {
           userId,
@@ -66,12 +73,55 @@ export async function POST(request: NextRequest) {
           srsInterval: srsResult.interval,
           srsRepetitions: srsResult.repetitions,
           srsEaseFactor: srsResult.easeFactor,
-          nextReviewDate: (() => {
-            const d = new Date();
-            d.setDate(d.getDate() + Math.max(1, srsResult.interval));
-            return d;
-          })()
+          nextReviewDate: reviewDate,
         }
+      });
+
+      const currentState = await prisma.userQuestionState.findUnique({
+        where: {
+          userId_questionId: {
+            userId,
+            questionId,
+          },
+        },
+      });
+
+      await prisma.userQuestionState.upsert({
+        where: {
+          userId_questionId: {
+            userId,
+            questionId,
+          },
+        },
+        update: {
+          lastSeenAt: new Date(),
+          lastAnsweredAt: new Date(),
+          lastAnsweredCorrect: isCorrect,
+          timesSeen: { increment: 1 },
+          timesAnswered: { increment: 1 },
+          timesCorrect: isCorrect ? { increment: 1 } : undefined,
+          nextEligibleAt: getNextQuestionEligibleAt({
+            timesSeen: (currentState?.timesSeen ?? 0) + 1,
+            isCorrect,
+            nextReviewDate: reviewDate,
+          }),
+          lastDifficultySeen: questionElo,
+        },
+        create: {
+          userId,
+          questionId,
+          lastAnsweredAt: new Date(),
+          lastAnsweredCorrect: isCorrect,
+          timesSeen: 1,
+          timesAnswered: 1,
+          timesCorrect: isCorrect ? 1 : 0,
+          nextEligibleAt: getNextQuestionEligibleAt({
+            timesSeen: 1,
+            isCorrect,
+            nextReviewDate: reviewDate,
+          }),
+          lastDifficultySeen: questionElo,
+        },
       });
 
       // Lazily upsert TopicStats
@@ -88,7 +138,7 @@ export async function POST(request: NextRequest) {
             userId,
             subject,
             topicName,
-            elo: 1500 + eloResult.eloChange,
+            elo: 1000 + eloResult.eloChange,
             xp: xpAwarded
           }
         });

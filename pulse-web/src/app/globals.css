@@ -1,45 +1,63 @@
 @import "tailwindcss";
 
-@theme inline {
-  --color-navy-900: #0A1929;
-  --color-navy-800: #0C1E36;
-  --color-navy-700: #0f2d4b;
-  --color-neon-blue: #00D8E8;
-  --color-neon-blue-hover: #00C4D4;
-  --color-neon-blue-glow: rgba(0, 216, 232, 0.3);
-  
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
-  --font-orbitron: var(--font-orbitron), ui-sans-serif, system-ui, sans-serif;
+@layer base {
+  :root {
+    --color-spike-blue: #00B8D4;
+    --color-spike-blue-light: #E0F7FA;
+    --color-spike-blue-hover: #00A0B8;
+    --color-spike-blue-glow: rgba(0, 184, 212, 0.15);
+  }
+
+  body {
+    background-color: #F8FAFC;
+    color: #1e293b;
+  }
+
+  ::selection {
+    background: #E0F7FA;
+    color: #00B8D4;
+  }
 }
 
-body {
-  @apply bg-navy-900 text-slate-100;
+@utility squishy-shadow {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
-@utility neon-text {
-  text-shadow: 0 0 10px var(--color-neon-blue-glow);
-  color: var(--color-neon-blue);
+@utility squishy-shadow-lg {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
-@utility neon-border {
-  box-shadow: 0 0 10px var(--color-neon-blue-glow);
-  border-color: var(--color-neon-blue);
+@utility squishy-shadow-hover {
+  box-shadow: 0 6px 32px rgba(0, 184, 212, 0.12), 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
-@utility neon-shadow {
-  box-shadow: 0 0 15px var(--color-neon-blue-glow), inset 0 0 8px var(--color-neon-blue-glow);
-}
-
-@utility neon-glow {
-  filter: drop-shadow(0 0 8px var(--color-neon-blue-glow));
+@utility accent-glow {
+  box-shadow: 0 0 0 3px rgba(0, 184, 212, 0.15);
 }
 
 @utility animate-fade-in {
   animation: fadeIn 0.4s ease-out forwards;
 }
 
+@utility animate-bounce-in {
+  animation: bounceIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@utility animate-peek {
+  animation: peek 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bounceIn {
+  from { opacity: 0; transform: scale(0.9) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes peek {
+  from { opacity: 0; transform: translateY(100%); }
   to { opacity: 1; transform: translateY(0); }
 }
