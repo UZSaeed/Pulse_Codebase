@@ -5,11 +5,11 @@
  *
  * This populates the DB with questions from parameterized templates so that
  * early users hit existing questions instead of triggering LLM generation.
- * Each template ◊ seed combination produces a unique-but-mathematically-sound
- * question ó no AI/LLM calls are involved.
+ * Each template ù seed combination produces a unique-but-mathematically-sound
+ * question ù no AI/LLM calls are involved.
  */
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import {
@@ -105,7 +105,7 @@ async function main() {
                 distractorExplanations: JSON.stringify(q.distractorExplanations),
                 baseDifficulty: q.difficulty,
                 tagsJson: tags.tags,
-                graphSpec: q.graphSpec ? (q.graphSpec as unknown as Record<string, unknown>) : undefined,
+                graphSpec: q.graphSpec ? (q.graphSpec as unknown as Prisma.InputJsonValue) : undefined,
                 templateId: q.templateId,
                 templateSeed: q.seed,
                 generationType: 'template',
