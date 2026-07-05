@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Target, Calendar, ClipboardCheck, Settings, LogOut } from 'lucide-react';
+import { Home, Target, Calendar, ClipboardCheck, Gift, Settings, LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 const NAV_ITEMS = [
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: '/practice', label: 'Practice', icon: Target },
   { href: '/planner', label: 'Planner', icon: Calendar },
   { href: '/practice-tests', label: 'Practice Tests', icon: ClipboardCheck },
+  { href: '/referrals', label: 'Referrals', icon: Gift },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

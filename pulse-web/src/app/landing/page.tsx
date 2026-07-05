@@ -138,7 +138,7 @@ export default function LandingPage() {
 
           <div className="relative z-10 mx-auto max-w-3xl text-center">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-600/20 bg-cyan-50 px-4 py-2 text-sm font-bold text-cyan-600">
-              Free during early access
+              Free during early access &middot; Refer 5 friends = free forever
             </div>
             <h1 className="mb-6 text-4xl font-black leading-tight text-slate-900 md:text-6xl">
               SAT prep that actually knows what you need to work on.
@@ -151,9 +151,9 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="mt-12 flex justify-center">
-            <img src="/spike-mascot.png" alt="Spike the robot" className="h-32 w-32 animate-bounce-in object-contain md:h-40 md:w-40" />
-          </div>
+          <p className="mt-6 text-center text-sm text-slate-400">
+            Free while we&apos;re in early access. Refer 5 friends to lock in free lifetime access.
+          </p>
         </section>
 
         <section className="grid gap-6 pb-16 md:grid-cols-3">

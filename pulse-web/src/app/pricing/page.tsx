@@ -89,13 +89,13 @@ export default function PricingPage() {
         <section className="py-16 text-center md:py-24">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-600">
             <Gift className="h-4 w-4" />
-            Early access — completely free
+            Free during early access
           </div>
           <h1 className="mb-4 text-4xl font-black text-slate-900 md:text-5xl">
             Simple pricing. No surprises.
           </h1>
           <p className="mx-auto max-w-xl text-lg text-slate-500">
-            SpikePrep is free during early access. When we launch paid plans, early users keep free access.
+            SpikePrep is free while we&apos;re in early access. Refer 5 friends to lock in free access for life — even after paid plans launch.
           </p>
         </section>
 
@@ -104,12 +104,12 @@ export default function PricingPage() {
           <div className="relative overflow-hidden rounded-3xl border-2 border-cyan-600 bg-white p-8 squishy-shadow-lg">
             <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-cyan-600/10" />
             <div className="relative">
-              <div className="mb-1 text-sm font-bold uppercase tracking-wider text-cyan-600">Early bird</div>
+              <div className="mb-1 text-sm font-bold uppercase tracking-wider text-cyan-600">Early access</div>
               <div className="mb-2 flex items-baseline gap-1">
                 <span className="text-5xl font-black text-slate-900">$0</span>
-                <span className="text-lg text-slate-400">/forever</span>
+                <span className="text-lg text-slate-400">/during early access</span>
               </div>
-              <p className="mb-6 text-slate-500">Join now and get everything free — no catch.</p>
+              <p className="mb-6 text-slate-500">Join now and get full access free while we&apos;re in early access.</p>
 
               <ul className="mb-8 space-y-3">
                 {FEATURES.map((feature) => (
@@ -152,7 +152,7 @@ export default function PricingPage() {
             </ul>
 
             <div className="rounded-2xl bg-slate-50 p-4 text-center text-sm text-slate-400">
-              Coming soon — early bird users get this free
+              Coming soon — refer 5 friends to get Pro free for life
             </div>
           </div>
         </div>

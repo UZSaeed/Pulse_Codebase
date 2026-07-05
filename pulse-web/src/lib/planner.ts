@@ -45,7 +45,7 @@ const ELO_PER_QUESTION = 6;
 const COMPLETION_EFFICIENCY = 0.7;
 const DEFAULT_PREP_DAYS = 84;
 const PRACTICE_TEST_WINDOW_DAYS = 42; // last 6 weeks
-const PLAN_HORIZON_DAYS = 28;
+const PLAN_HORIZON_DAYS = 365;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export interface DomainState {
